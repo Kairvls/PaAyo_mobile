@@ -82,7 +82,7 @@ class HomeScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.pushNamed(
                     context,
-                    "/scanner",
+                    "/login",
                   );
                 },
               ),

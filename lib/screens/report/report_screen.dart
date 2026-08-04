@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 
 
 class ReportScreen extends StatefulWidget {
@@ -110,6 +111,21 @@ class _ReportScreenState extends State<ReportScreen> {
     ];
 
     File? selectedImage;
+
+    String? employeeIdError;
+    String? locationError;
+    String? equipmentError;
+    String? issueError;
+    String? descriptionError;
+
+    final employeeKey = GlobalKey();
+    final locationKey = GlobalKey();
+    final equipmentKey = GlobalKey();
+    final issueKey = GlobalKey();
+    final descriptionKey = GlobalKey();
+
+    final ScrollController scrollController =
+    ScrollController();
         
 
     @override
@@ -167,7 +183,7 @@ class _ReportScreenState extends State<ReportScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
 
-        
+        controller: scrollController,
 
         child: Container(
             width: double.infinity,
@@ -206,7 +222,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
             const SizedBox(height: 15),
 
-            TextField(
+            Container(
+            key: employeeKey,
+
+            child:TextField(
 
                 controller: employeeIdController,
 
@@ -215,6 +234,8 @@ class _ReportScreenState extends State<ReportScreen> {
                     _verifyTimer?.cancel();
 
                     setState(() {
+
+                        employeeIdError = null;
 
                         reporterVerified = false;
 
@@ -225,6 +246,8 @@ class _ReportScreenState extends State<ReportScreen> {
                         isCheckingReporter = false;
 
                     });
+
+                    
 
                     if (employeeIdController.text.trim().isEmpty) {
 
@@ -251,6 +274,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 decoration: InputDecoration(
                 labelText: "Employee ID *",
                 hintText: "Enter Employee ID",
+                errorText: employeeIdError,
                 enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(
@@ -269,6 +293,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 fillColor: const Color(0xffF8FAFC),
                 prefixIcon: Icon(Icons.badge_outlined),
               ),
+            ),
             ),
 
             const SizedBox(height: 15),
@@ -306,7 +331,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
                     )
 
-                    else if (reporterVerified)
+                    else if (reporterVerified && reporterName.isNotEmpty)
 
                     Row(
 
@@ -358,7 +383,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
                     const Text(
 
-                        "Waiting for Employee ID...",
+                        "Waiting for valid Employee ID...",
 
                     ),
 
@@ -384,7 +409,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
             const SizedBox(height: 15),
 
-            TextField(
+            Container(
+                key: locationKey,
+
+            child:TextField(
 
                 controller: TextEditingController(
                     text: selectedLocation ?? "",
@@ -398,7 +426,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         ? null
                         : "Location",
                     hintText: "Location",
-
+                    errorText: locationError,
                     suffixIcon: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     ),
@@ -446,6 +474,8 @@ class _ReportScreenState extends State<ReportScreen> {
 
                     onSelected: (room) {
 
+                        locationError = null;
+
                         setState(() {
 
                         selectedLocation = room["location"];
@@ -463,6 +493,8 @@ class _ReportScreenState extends State<ReportScreen> {
                 },
 
                 ),
+
+            ),
 
             const Padding(
                     padding: EdgeInsets.symmetric(vertical: 22),
@@ -484,7 +516,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
             if (!equipmentNotListed)
 
-                TextField(
+            Container(
+                key: equipmentKey,
+
+                child:TextField(
 
                     controller: TextEditingController(
                         text: selectedEquipment ?? "",
@@ -498,7 +533,7 @@ class _ReportScreenState extends State<ReportScreen> {
                             ? null
                             : "Equipment",
                         hintText: "Equipment",
-
+                        errorText: equipmentError,
                         suffixIcon: const Icon(
                             Icons.keyboard_arrow_down_rounded,
                         ),
@@ -541,6 +576,8 @@ class _ReportScreenState extends State<ReportScreen> {
 
                             onSelected: (item) {
 
+                                equipmentError = null;
+
                                 setState(() {
 
                                     selectedEquipment =
@@ -561,11 +598,14 @@ class _ReportScreenState extends State<ReportScreen> {
 
                     },
 
-                )
+                ),
+            )
 
             else
+            Container(
+                key: equipmentKey,
 
-                TextField(
+                child:TextField(
 
                     controller: equipmentController,
 
@@ -574,6 +614,8 @@ class _ReportScreenState extends State<ReportScreen> {
                         labelText: "Equipment Name",
 
                         hintText: "Enter equipment name",
+
+                        errorText: equipmentError,
 
                         filled: true,
 
@@ -602,7 +644,19 @@ class _ReportScreenState extends State<ReportScreen> {
 
                     ),
 
+                    onChanged: (_) {
+
+                        setState(() {
+
+                            equipmentError = null;
+
+                        });
+
+                    },
+
                 ),
+
+            ),
 
             const SizedBox(height: 12),
 
@@ -676,6 +730,7 @@ class _ReportScreenState extends State<ReportScreen> {
             if (suggestedIssues.isEmpty)
 
                 Container(
+                    key: issueKey,
 
                     width: double.infinity,
 
@@ -758,12 +813,15 @@ class _ReportScreenState extends State<ReportScreen> {
 
                         onSelected: (_) {
 
-                        setState(() {
+                            setState(() {
 
-                            selectedSuggestedIssueId =
-                                issue["issue_template_id"];
+                                selectedSuggestedIssueId =
+                                    issue["issue_template_id"];
 
-                        });
+                                issueError = null;
+                                descriptionError = null;
+
+                            });
 
                         },
 
@@ -805,6 +863,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
                                 onSelected: (item) {
 
+                                    issueError = null;
+                                    descriptionError = null;
+
                                     setState(() {
 
                                         selectedSuggestedIssueId =
@@ -821,6 +882,28 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
 
                 ],
+
+                ),
+
+            if (issueError != null)
+
+                Padding(
+
+                padding: const EdgeInsets.only(top: 8),
+
+                child: Text(
+
+                    issueError!,
+
+                    style: const TextStyle(
+
+                    color: Colors.red,
+
+                    fontSize: 12,
+
+                    ),
+
+                ),
 
                 ),
 
@@ -841,12 +924,15 @@ class _ReportScreenState extends State<ReportScreen> {
             _buildSectionTitle("Description"),
 
             const SizedBox(height: 15),
+            Container(
+                key: descriptionKey,
 
-            TextField(
+            child:TextField(
               controller: descriptionController,
               maxLines: 5,
               decoration: InputDecoration(
                 hintText: "Describe the problem...",
+                errorText: descriptionError,
                 enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(
@@ -864,6 +950,23 @@ class _ReportScreenState extends State<ReportScreen> {
                 filled: true,
                 fillColor: const Color(0xffF8FAFC),
               ),
+
+              onChanged: (_) {
+
+                    if (descriptionController.text.trim().isNotEmpty) {
+
+                        setState(() {
+
+                            descriptionError = null;
+                            issueError = null;
+
+                        });
+
+                    }
+
+                },
+            ),
+
             ),
 
             const Padding(
@@ -1001,7 +1104,15 @@ class _ReportScreenState extends State<ReportScreen> {
                         borderRadius: BorderRadius.circular(18),
                     ),
                     ),
-                    onPressed: confirmSubmitReport,
+                    onPressed: () async {
+
+                        if (validateForm()) {
+
+                            await confirmSubmitReport();
+
+                        }
+
+                    },
                     child: const Text(
                     "Submit Report",
                     style: TextStyle(
@@ -1061,21 +1172,25 @@ class _ReportScreenState extends State<ReportScreen> {
 
         });
 
+        
+
         final reporter = await api.verifyReporter(employeeId);
 
         if (!mounted) return;
+
+        
 
         if (reporter != null) {
 
             setState(() {
 
-            reporterVerified = true;
+                reporterVerified = true;
+                reporterName = reporter["reporter_full_name"] ?? "";
+                reporterError = null;
 
-            reporterName = reporter["reporter_full_name"] ?? "";
+                employeeIdError = null;
 
-            reporterError = null;
-
-            isCheckingReporter = false;
+                isCheckingReporter = false;
 
             });
 
@@ -1083,15 +1198,14 @@ class _ReportScreenState extends State<ReportScreen> {
 
             setState(() {
 
-            reporterVerified = false;
+                reporterVerified = false;
+                reporterName = "";
+                reporterError = "Employee ID not found.";
 
-            reporterName = "";
+                employeeIdError =
+                    "Please enter a valid Employee ID.";
 
-            reporterError =
-
-                "Employee ID not found.";
-
-            isCheckingReporter = false;
+                isCheckingReporter = false;
 
             });
 
@@ -1271,89 +1385,156 @@ class _ReportScreenState extends State<ReportScreen> {
 
         }
 
+        
+
+        bool validateForm() {
+
+            if (isCheckingReporter) {
+
+                employeeIdError =
+                    "Please wait while verifying Employee ID.";
+
+                setState(() {});
+
+                return false;
+
+            }
+            GlobalKey? firstErrorKey;
+
+            bool hasError = false;
+
+            setState(() {
+
+                employeeIdError = null;
+                locationError = null;
+                equipmentError = null;
+                issueError = null;
+                descriptionError = null;
+
+            });
+
+            // =====================================
+            // Employee
+            // =====================================
+
+            if (!reporterVerified || reporterError != null) {
+
+                employeeIdError =
+                    "Please enter a valid Employee ID.";
+                firstErrorKey ??= employeeKey;
+
+                hasError = true;
+
+            }
+
+            // =====================================
+            // Location
+            // =====================================
+
+            if (selectedRoomId == null) {
+
+                locationError =
+                    "Please select a location.";
+                firstErrorKey ??= locationKey;
+
+                hasError = true;
+
+            }
+
+            // =====================================
+            // Equipment
+            // =====================================
+
+            if (equipmentNotListed) {
+
+                if (equipmentController.text.trim().isEmpty) {
+
+                    equipmentError =
+                        "Please enter the equipment name.";
+                        firstErrorKey ??= equipmentKey;
+
+                    hasError = true;
+
+                }
+
+            } else {
+
+                if (selectedEquipmentId == null) {
+
+                    equipmentError =
+                        "Please select equipment.";
+                    firstErrorKey ??= equipmentKey;
+
+                    hasError = true;
+
+                }
+
+            }
+
+            // =====================================
+            // Suggested Issue OR Description
+            // =====================================
+
+            final hasIssue =
+                selectedSuggestedIssueId != null;
+
+            final hasDescription =
+                descriptionController.text
+                    .trim()
+                    .isNotEmpty;
+
+            if (!hasIssue && !hasDescription) {
+
+                issueError =
+                    "Select a suggested issue or enter a description.";
+
+                descriptionError =
+                    "Select a suggested issue or enter a description.";
+
+                firstErrorKey ??= equipmentKey;
+
+                hasError = true;
+
+            }
+
+            setState(() {});
+
+            if (hasError) {
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+
+                    if (firstErrorKey != null) {
+
+                        scrollToField(firstErrorKey!);
+
+                    }
+
+                });
+
+                return false;
+
+            }
+
+            return true;
+
+        }
+
+        void scrollToField(GlobalKey key) {
+            final context = key.currentContext;
+
+            if (context != null) {
+                Scrollable.ensureVisible(
+                context,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+                alignment: 0.15,
+                );
+            }
+            }
+
     Future<void> submitReport() async {
 
-        // =====================================
-        // Employee ID
-        // =====================================
-
-        if (!reporterVerified) {
-
-            _showError(
-            "Please enter a valid Employee ID."
-            );
-
-            return;
-
-        }
-
-        // =====================================
-        // Location
-        // =====================================
-
-        if (selectedRoomId == null) {
-
-            _showError(
-            "Please select a location."
-            );
-
-            return;
-
-        }
-
-        // =====================================
-        // Equipment
-        // =====================================
-
-        if (equipmentNotListed) {
-
-            if (equipmentController.text.trim().isEmpty) {
-
-            _showError(
-                "Please enter the equipment name."
-            );
-
-            return;
-
-            }
-
-        } else {
-
-            if (selectedEquipmentId == null) {
-
-            _showError(
-                "Please select equipment."
-            );
-
-            return;
-
-            }
-
-        }
-
-        // =====================================
-        // Suggested Issue OR Description
-        // =====================================
-
-        final hasIssue =
-            selectedSuggestedIssueId != null;
-
-        final hasDescription =
-            descriptionController.text
-                .trim()
-                .isNotEmpty;
-
-        if (!hasIssue && !hasDescription) {
-
-            _showError(
-
-            "Select a suggested issue or provide a description.",
-
-            );
-
-            return;
-
-        }
+        
 
         try {
 
@@ -1387,15 +1568,49 @@ class _ReportScreenState extends State<ReportScreen> {
 
             );
 
-            _showSuccess(
-            "Report submitted successfully."
-            );
+            await showSuccessDialog();
+
+            resetForm();
 
         } catch (e) {
 
-            _showError(
-            "Failed to submit report."
-            );
+            String message = "Failed to submit report.";
+
+            if (e is DioException) {
+
+                if (e.response?.data is Map<String, dynamic>) {
+
+                message = e.response!.data["message"] ?? message;
+
+                } else if (e.response?.data is String) {
+
+                message = e.response!.data;
+
+                } else {
+
+                message = e.message ?? message;
+
+                }
+
+                // ============================
+                // Employee ID became invalid
+                // ============================
+                if (message.toLowerCase().contains("employee id")) {
+
+                    setState(() {
+
+                        reporterVerified = false;
+                        reporterName = "";
+                        reporterError = "Employee ID not found.";
+                        employeeIdError = "Please enter a valid Employee ID.";
+
+                    });
+
+                }
+
+            }
+
+            await showErrorDialog(message);
 
         }
 
@@ -1729,19 +1944,156 @@ class _ReportScreenState extends State<ReportScreen> {
 
         }
 
-        void _showSuccess(String message) {
+        Future<void> showSuccessDialog() async {
 
-        ScaffoldMessenger.of(context).showSnackBar(
+            await showDialog(
 
-            SnackBar(
+                context: context,
 
-            backgroundColor: Colors.green,
+                barrierDismissible: false,
 
-            content: Text(message),
+                builder: (_) {
 
-            ),
+                    return AlertDialog(
 
-        );
+                        icon: const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 60,
+                        ),
+
+                        title: const Text(
+                            "Report Submitted",
+                        ),
+
+                        content: const Text(
+                            "Your maintenance report has been submitted successfully.",
+                        ),
+
+                        actions: [
+
+                            FilledButton(
+
+                                onPressed: () {
+
+                                    Navigator.pop(context);
+
+                                },
+
+                                child: const Text("OK"),
+
+                            )
+
+                        ],
+
+                    );
+
+                },
+
+            );
+
+        }
+
+        Future<void> showErrorDialog(String message) async {
+
+            await showDialog(
+
+                context: context,
+
+                builder: (_) {
+
+                    return AlertDialog(
+
+                        icon: const Icon(
+
+                            Icons.error,
+
+                            color: Colors.red,
+
+                            size: 60,
+
+                        ),
+
+                        title: const Text(
+                            "Submission Failed",
+                        ),
+
+                        content: Text(message),
+
+                        actions: [
+
+                            FilledButton(
+                                onPressed: () {
+                                    Navigator.pop(context);
+
+                                    Future.delayed(
+                                        const Duration(milliseconds: 200),
+                                        () {
+                                            if (employeeIdError != null) {
+                                                scrollToField(employeeKey);
+                                            } else if (locationError != null) {
+                                                scrollToField(locationKey);
+                                            } else if (equipmentError != null) {
+                                                scrollToField(equipmentKey);
+                                            } else if (issueError != null) {
+                                                scrollToField(issueKey);
+                                            } else if (descriptionError != null) {
+                                                scrollToField(descriptionKey);
+                                            }
+                                        },
+                                    );
+                                },
+
+                                child: const Text("OK"),
+                            )
+
+                        ],
+
+                    );
+
+                },
+
+            );
+
+        }
+
+        void resetForm() {
+
+            employeeIdController.clear();
+            descriptionController.clear();
+            equipmentController.clear();
+
+            setState(() {
+
+                reporterVerified = false;
+                reporterName = "";
+                reporterError = null;
+
+                selectedRoomId = null;
+                selectedLocation = null;
+
+                selectedEquipment = null;
+                selectedEquipmentId = null;
+
+                selectedSuggestedIssueId = null;
+
+                suggestedIssues.clear();
+
+                equipment.clear();
+
+                equipmentNotListed = false;
+
+                selectedImage = null;
+
+                priority = "Non-Urgent";
+
+                employeeIdError = null;
+                locationError = null;
+                equipmentError = null;
+                issueError = null;
+                descriptionError = null;
+
+            });
 
         }
 
