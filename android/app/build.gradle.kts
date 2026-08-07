@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.prism_mobile"
+    namespace = "ph.edu.stiormoc.paayo"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -16,13 +16,14 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.prism_mobile"
+        applicationId = "ph.edu.stiormoc.paayo"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = 37
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appAuthRedirectScheme"] = "msauth"
     }
 
     buildTypes {

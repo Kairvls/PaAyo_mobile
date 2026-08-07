@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import 'dart:async';
-import 'package:dropdown_search/dropdown_search.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
@@ -148,24 +147,25 @@ class _ReportScreenState extends State<ReportScreen> {
         return suggestedIssues.take(5).toList();
         }
 
-    Widget build(BuildContext context) {
-
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
-
+      backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFFF7F9FC),
-        foregroundColor: const Color(0xff1A1D29),
-        titleSpacing: 0,
+        backgroundColor: const Color(0xFFF3F4F6),
+        foregroundColor: const Color(0xFF111827),
+        titleSpacing: 8,
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               "Maintenance Report",
               style: TextStyle(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
                 fontSize: 22,
+                letterSpacing: -0.4,
+                color: Color(0xFF111827),
               ),
             ),
             SizedBox(height: 2),
@@ -173,965 +173,473 @@ class _ReportScreenState extends State<ReportScreen> {
               "Report broken or faulty equipment.",
               style: TextStyle(
                 fontSize: 13,
-                color: Color(0xff64748B),
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF9CA3AF),
               ),
             ),
           ],
         ),
       ),
-
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-
-        controller: scrollController,
-
-        child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                color: const Color(0xffE8EDF3),
-                ),
-                boxShadow: const [
-                BoxShadow(
-                    color: Color(0x08000000),
-                    blurRadius: 30,
-                    offset: Offset(0, 10),
-                ),
-                ],
-            ),
-            child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-          children: [
-
-            // ===========================
-            // REPORTER INFORMATION
-            // ===========================
-
-            const Text(
-                "Reporter Information",
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xff0F172A),
-                ),
-                ),
-
-            const SizedBox(height: 15),
-
-            Container(
-            key: employeeKey,
-
-            child:TextField(
-
-                controller: employeeIdController,
-
-                onChanged: (_) {
-
-                    _verifyTimer?.cancel();
-
-                    setState(() {
-
-                        employeeIdError = null;
-
-                        reporterVerified = false;
-
-                        reporterName = "";
-
-                        reporterError = null;
-
-                        isCheckingReporter = false;
-
-                    });
-
-                    
-
-                    if (employeeIdController.text.trim().isEmpty) {
-
-                        return;
-
-                    }
-
-                    _verifyTimer = Timer(
-
-                        const Duration(milliseconds: 600),
-
-                        () {
-
-                        verifyReporter();
-
-                        },
-
-                    );
-
-                    },
-
-                
-
-                decoration: InputDecoration(
-                labelText: "Employee ID *",
-                hintText: "Enter Employee ID",
-                errorText: employeeIdError,
-                enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                    color: Color(0xffE2E8F0),
-                ),
-                ),
-
-                focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                    color: Color(0xff2563EB),
-                    width: 1.5,
-                ),
-                ),
-                filled: true,
-                fillColor: const Color(0xffF8FAFC),
-                prefixIcon: Icon(Icons.badge_outlined),
-              ),
-            ),
-            ),
-
-            const SizedBox(height: 15),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(15),
-
-              decoration: BoxDecoration(
-                color: const Color(0xffF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xffE2E8F0),
-                ),
-              ),
-
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  Text(
-                    "Reporter Status",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
+                  // ===========================
+                  // REPORTER CARD
+                  // ===========================
+                  _buildSectionTitle("Reporter"),
+                  const SizedBox(height: 10),
+                  _softCard(
+                    child: Column(
+                      children: [
+                        KeyedSubtree(
+                          key: employeeKey,
+                          child: _textInputRow(
+                            icon: Icons.badge_outlined,
+                            iconColor: const Color(0xFF111827),
+                            controller: employeeIdController,
+                            hint: "Enter Employee ID",
+                            errorText: employeeIdError,
+                            onChanged: (_) {
+                              _verifyTimer?.cancel();
+                              setState(() {
+                                employeeIdError = null;
+                                reporterVerified = false;
+                                reporterName = "";
+                                reporterError = null;
+                                isCheckingReporter = false;
+                              });
+                              if (employeeIdController.text.trim().isEmpty) {
+                                return;
+                              }
+                              _verifyTimer = Timer(
+                                const Duration(milliseconds: 600),
+                                verifyReporter,
+                              );
+                            },
+                          ),
+                        ),
+                        _rowDivider(),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                          child: Row(
+                            children: [
+                              _statusDot(),
+                              const SizedBox(width: 12),
+                              Expanded(child: _reporterStatusText()),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  SizedBox(height: 8),
-
-                  if (isCheckingReporter)
-
-                    const Center(
-
-                        child: CircularProgressIndicator(),
-
-                    )
-
-                    else if (reporterVerified && reporterName.isNotEmpty)
-
-                    Row(
-
-                        children: [
-
-                        const Icon(
-
-                            Icons.verified,
-
-                            color: Colors.green,
-
-                        ),
-
-                        const SizedBox(width: 8),
-
-                        Text(
-
-                            reporterName,
-
-                            style: const TextStyle(
-
-                            fontWeight: FontWeight.bold,
-
-                            fontSize: 16,
-
-                            ),
-
-                        ),
-
-                        ],
-
-                    )
-
-                    else if (reporterError != null)
-
-                    Text(
-
-                        reporterError!,
-
-                        style: const TextStyle(
-
-                        color: Colors.red,
-
-                        ),
-
-                    )
-
-                    else
-
-                    const Text(
-
-                        "Waiting for valid Employee ID...",
-
-                    ),
-
-                ],
-              ),
-            ),
-
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 22),
-                child: Divider(
-                    thickness: .8,
-                    color: Color(0xffEEF2F7),
-                ),
-                ),
-
-            
-
-            // ===========================
-            // LOCATION
-            // ===========================
-
-            _buildSectionTitle("Location"),
-
-            const SizedBox(height: 15),
-
-            Container(
-                key: locationKey,
-
-            child:TextField(
-
-                controller: TextEditingController(
-                    text: selectedLocation ?? "",
-                ),
-
-                readOnly: true,
-
-                decoration: InputDecoration(
-
-                    labelText: selectedLocation == null
-                        ? null
-                        : "Location",
-                    hintText: "Location",
-                    errorText: locationError,
-                    suffixIcon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    ),
-
-                    filled: true,
-
-                    fillColor: const Color(0xffF8FAFC),
-
-                    enabledBorder: OutlineInputBorder(
-
-                    borderRadius: BorderRadius.circular(16),
-
-                    borderSide: const BorderSide(
-                        color: Color(0xffE2E8F0),
-                    ),
-
-                    ),
-
-                    focusedBorder: OutlineInputBorder(
-
-                    borderRadius: BorderRadius.circular(16),
-
-                    borderSide: const BorderSide(
-                        color: Color(0xff2563EB),
-                        width: 1.5,
-                    ),
-
-                    ),
-
-                ),
-
-                onTap: () {
-
-                    showSelectionBottomSheet(
-
-                    title: "Select Location",
-
-                    items: rooms,
-
-                    selectedItem: selectedRoomId,
-
-                    icon: Icons.location_on_outlined,
-
-                    label: (room) => room["location"],
-
-                    onSelected: (room) {
-
-                        locationError = null;
-
-                        setState(() {
-
-                        selectedLocation = room["location"];
-
-                        selectedRoomId = room["room_id"];
-
-                        });
-
-                        loadEquipment(room["room_id"]);
-
-                    },
-
-                    );
-
-                },
-
-                ),
-
-            ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            
-
-            // ===========================
-            // EQUIPMENT
-            // ===========================
-
-            _buildSectionTitle("Equipment"),
-
-            const SizedBox(height: 15),
-
-            if (!equipmentNotListed)
-
-            Container(
-                key: equipmentKey,
-
-                child:TextField(
-
-                    controller: TextEditingController(
-                        text: selectedEquipment ?? "",
-                    ),
-
-                    readOnly: true,
-
-                    decoration: InputDecoration(
-
-                        labelText: selectedEquipment == null
-                            ? null
-                            : "Equipment",
-                        hintText: "Equipment",
-                        errorText: equipmentError,
-                        suffixIcon: const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                        ),
-
-                        filled: true,
-
-                        fillColor: const Color(0xffF8FAFC),
-
-                        enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xffE2E8F0),
-                            ),
-                        ),
-
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xff2563EB),
-                                width: 1.5,
-                            ),
-                        ),
-
-                    ),
-
-                    onTap: () {
-
-                        showSelectionBottomSheet(
-
-                            title: "Select Equipment",
-
-                            items: equipment,
-
-                            selectedItem: selectedEquipmentId,
-
-                            icon: Icons.computer_rounded,
-
-                            label: (item) =>
-                                item["equipment_name"],
-
-                            onSelected: (item) {
-
-                                equipmentError = null;
-
-                                setState(() {
-
-                                    selectedEquipment =
-                                        item["equipment_name"];
-
-                                    selectedEquipmentId =
-                                        item["equipment_id"];
-
-                                });
-
-                                loadSuggestedIssues(
-                                    item["equipment_id"],
-                                );
-
-                            },
-
-                        );
-
-                    },
-
-                ),
-            )
-
-            else
-            Container(
-                key: equipmentKey,
-
-                child:TextField(
-
-                    controller: equipmentController,
-
-                    decoration: InputDecoration(
-
-                        labelText: "Equipment Name",
-
-                        hintText: "Enter equipment name",
-
-                        errorText: equipmentError,
-
-                        filled: true,
-
-                        fillColor: const Color(0xffF8FAFC),
-
-                        enabledBorder: OutlineInputBorder(
-
-                            borderRadius: BorderRadius.circular(16),
-
-                            borderSide: const BorderSide(
-                                color: Color(0xffE2E8F0),
-                            ),
-
-                        ),
-
-                        focusedBorder: OutlineInputBorder(
-
-                            borderRadius: BorderRadius.circular(16),
-
-                            borderSide: const BorderSide(
-                                color: Color(0xff2563EB),
-                                width: 1.5,
-                            ),
-
-                        ),
-
-                    ),
-
-                    onChanged: (_) {
-
-                        setState(() {
-
-                            equipmentError = null;
-
-                        });
-
-                    },
-
-                ),
-
-            ),
-
-            const SizedBox(height: 12),
-
-            SwitchListTile(
-                value: equipmentNotListed,
-                onChanged: (value) async {
-
-                    setState(() {
-
-                        equipmentNotListed = value;
-
-                        if (value) {
-
-                            // switched to manual equipment
-
-                            selectedEquipment = null;
-
-                            selectedEquipmentId = null;
-
-                        } else {
-
-                            // switched back to dropdown
-
-                            equipmentController.clear();
-
-                        }
-
-                        selectedSuggestedIssueId = null;
-
-                    });
-
-                    if (value) {
-
-                        await loadGlobalSuggestedIssues();
-
-                    } else {
-
-                        suggestedIssues.clear();
-
-                    }
-
-                },
-                activeColor: const Color(0xff2563EB),
-                title: const Text(
-                    "Equipment not listed",
-                    style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    ),
-                ),
-                contentPadding: EdgeInsets.zero,
-            ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            
-
-            // ===========================
-            // SUGGESTED ISSUE
-            // ===========================
-
-            _buildSectionTitle("Suggested Issue"),
-
-            const SizedBox(height: 15),
-
-            if (suggestedIssues.isEmpty)
-
-                Container(
-                    key: issueKey,
-
-                    width: double.infinity,
-
-                    padding: const EdgeInsets.all(18),
-
-                    decoration: BoxDecoration(
-
-                        color: const Color(0xffF8FAFC),
-
-                        borderRadius: BorderRadius.circular(16),
-
-                        border: Border.all(
-
-                            color: const Color(0xffE2E8F0),
-
-                        ),
-
-                    ),
-
+                  const SizedBox(height: 22),
+
+                  // ===========================
+                  // LOCATION + EQUIPMENT CARD
+                  // ===========================
+                  _buildSectionTitle("Where & what"),
+                  const SizedBox(height: 10),
+                  _softCard(
                     child: Column(
-
-                        children: [
-
-                            Icon(
-
-                                Icons.info_outline_rounded,
-
-                                color: Colors.grey.shade500,
-
-                                size: 34,
-
-                            ),
-
-                            SizedBox(height: 10),
-
-                            Text(
-
-                                equipmentNotListed
-                                    ? "Enable Equipment Not Listed to load global suggested issues."
-                                    : "Select an equipment first to see suggested issues.",
-
-                                textAlign: TextAlign.center,
-
-                                style: TextStyle(
-
-                                    color: Color(0xff64748B),
-
-                                    fontSize: 14,
-
-                                ),
-
-                            ),
-
-                        ],
-
-                    ),
-
-                )
-                else
-
-            Wrap(
-
-                spacing: 10,
-
-                runSpacing: 10,
-
-                children: [
-
-                    ...visibleSuggestedIssues.map((issue) {
-
-                    return ChoiceChip(
-
-                        label: Text(
-                        issue["issue_template_name"],
-                        ),
-
-                        selected:
-                            selectedSuggestedIssueId ==
-                            issue["issue_template_id"],
-
-                        onSelected: (_) {
-
-                            setState(() {
-
-                                selectedSuggestedIssueId =
-                                    issue["issue_template_id"];
-
-                                issueError = null;
-                                descriptionError = null;
-
-                            });
-
-                        },
-
-                    );
-
-                    }),
-
-                    if (
-                    equipmentNotListed &&
-                    !showAllGlobalIssues &&
-                    suggestedIssues.length > 5
-                    )
-
-                    ActionChip(
-
-                        avatar: const Icon(
-                        Icons.search,
-                        size: 18,
-                        ),
-
-                        label: Text(
-                        "+${suggestedIssues.length - 5} More Issues",
-                        ),
-
-                        onPressed: () {
-
-                            showSelectionBottomSheet(
-
-                                title: "Select Suggested Issue",
-
-                                items: suggestedIssues,
-
-                                selectedItem: selectedSuggestedIssueId,
-
-                                icon: Icons.build_circle_outlined,
-
-                                label: (item) =>
-                                    item["issue_template_name"],
-
-                                onSelected: (item) {
-
-                                    issueError = null;
-                                    descriptionError = null;
-
-                                    setState(() {
-
-                                        selectedSuggestedIssueId =
-                                            item["issue_template_id"];
-
-                                    });
-
+                      children: [
+                        KeyedSubtree(
+                          key: locationKey,
+                          child: _selectRow(
+                            icon: Icons.location_on_rounded,
+                            iconColor: const Color(0xFF111827),
+                            value: selectedLocation,
+                            placeholder: "Select location",
+                            errorText: locationError,
+                            onTap: () {
+                              showSelectionBottomSheet(
+                                title: "Select Location",
+                                items: rooms,
+                                selectedItem: selectedRoomId,
+                                icon: Icons.location_on_outlined,
+                                label: (room) => room["location"],
+                                onSelected: (room) {
+                                  locationError = null;
+                                  setState(() {
+                                    selectedLocation = room["location"];
+                                    selectedRoomId = room["room_id"];
+                                  });
+                                  loadEquipment(room["room_id"]);
                                 },
-
-                            );
-
-                        },
-
+                              );
+                            },
+                          ),
+                        ),
+                        _rowDivider(),
+                        KeyedSubtree(
+                          key: equipmentKey,
+                          child: equipmentNotListed
+                              ? _textInputRow(
+                                  icon: Icons.devices_other_rounded,
+                                  iconColor: const Color(0xFFEF4444),
+                                  controller: equipmentController,
+                                  hint: "Enter equipment name",
+                                  errorText: equipmentError,
+                                  onChanged: (_) {
+                                    setState(() {
+                                      equipmentError = null;
+                                    });
+                                  },
+                                )
+                              : _selectRow(
+                                  icon: Icons.devices_other_rounded,
+                                  iconColor: const Color(0xFFEF4444),
+                                  value: selectedEquipment,
+                                  placeholder: "Select equipment",
+                                  errorText: equipmentError,
+                                  onTap: () {
+                                    showSelectionBottomSheet(
+                                      title: "Select Equipment",
+                                      items: equipment,
+                                      selectedItem: selectedEquipmentId,
+                                      icon: Icons.computer_rounded,
+                                      label: (item) => item["equipment_name"],
+                                      onSelected: (item) {
+                                        equipmentError = null;
+                                        setState(() {
+                                          selectedEquipment =
+                                              item["equipment_name"];
+                                          selectedEquipmentId =
+                                              item["equipment_id"];
+                                        });
+                                        loadSuggestedIssues(
+                                          item["equipment_id"],
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     ),
+                  ),
 
-                ],
-
-                ),
-
-            if (issueError != null)
-
-                Padding(
-
-                padding: const EdgeInsets.only(top: 8),
-
-                child: Text(
-
-                    issueError!,
-
-                    style: const TextStyle(
-
-                    color: Colors.red,
-
-                    fontSize: 12,
-
-                    ),
-
-                ),
-
-                ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            
-
-            // ===========================
-            // DESCRIPTION
-            // ===========================
-
-            _buildSectionTitle("Description"),
-
-            const SizedBox(height: 15),
-            Container(
-                key: descriptionKey,
-
-            child:TextField(
-              controller: descriptionController,
-              maxLines: 5,
-              decoration: InputDecoration(
-                hintText: "Describe the problem...",
-                errorText: descriptionError,
-                enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                    color: Color(0xffE2E8F0),
-                ),
-                ),
-
-                focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                    color: Color(0xff2563EB),
-                    width: 1.5,
-                ),
-                ),
-                filled: true,
-                fillColor: const Color(0xffF8FAFC),
-              ),
-
-              onChanged: (_) {
-
-                    if (descriptionController.text.trim().isNotEmpty) {
-
+                  const SizedBox(height: 10),
+                  _softCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: SwitchListTile(
+                      value: equipmentNotListed,
+                      onChanged: (value) async {
                         setState(() {
-
-                            descriptionError = null;
-                            issueError = null;
-
+                          equipmentNotListed = value;
+                          if (value) {
+                            selectedEquipment = null;
+                            selectedEquipmentId = null;
+                          } else {
+                            equipmentController.clear();
+                          }
+                          selectedSuggestedIssueId = null;
                         });
-
-                    }
-
-                },
-            ),
-
-            ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            
-
-            // ===========================
-            // PRIORITY
-            // ===========================
-
-            _buildSectionTitle("Priority"),
-
-            const SizedBox(height: 15),
-
-            Row(
-
-                children: priorities.map((item) {
-
-                    return Expanded(
-
-                    child: Padding(
-
-                        padding: EdgeInsets.only(
-
-                        right: item == priorities.first ? 6 : 0,
-                        left: item == priorities.last ? 6 : 0,
-
-                        ),
-
-                        child: _buildPriorityCard(
-
-                        option: item,
-                        selected: priority == item.value,
-
-                        ),
-
-                    ),
-
-                    );
-
-                }).toList(),
-
-                ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            
-
-            // ===========================
-            // PHOTO
-            // ===========================
-
-            _buildSectionTitle("Upload Photo (Optional)"),
-
-            const SizedBox(height: 15),
-
-            GestureDetector(
-                onTap: pickImage,
-                child: Container(
-                    height: 150,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                    color: const Color(0xffF8FAFC),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                        color: const Color(0xffD6E2F0),
-                    ),
-                    ),
-                    child: selectedImage == null
-                        ? const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                            Icon(
-                                Icons.cloud_upload_outlined,
-                                size: 42,
-                                color: Color(0xff2563EB),
-                            ),
-                            SizedBox(height: 12),
-                            Text(
-                                "Tap to upload a photo",
-                                style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                                "PNG • JPG • JPEG",
-                                style: TextStyle(
-                                color: Color(0xff94A3B8),
-                                ),
-                            ),
-                            ],
-                        )
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Image.file(
-                            selectedImage!,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            ),
-                        ),
-                ),
-                ),
-
-            const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 22),
-                    child: Divider(
-                        thickness: .8,
-                        color: Color(0xffEEF2F7),
-                    ),
-                    ),
-
-            const SizedBox(height: 35),
-
-            SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: FilledButton(
-                    style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xff2563EB),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                    ),
-                    ),
-                    onPressed: () async {
-
-                        if (validateForm()) {
-
-                            await confirmSubmitReport();
-
+                        if (value) {
+                          await loadGlobalSuggestedIssues();
+                        } else {
+                          suggestedIssues.clear();
                         }
+                      },
+                      activeThumbColor: Colors.white,
+                      activeTrackColor: const Color(0xFF111827),
+                      title: const Text(
+                        "Equipment not listed",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
 
-                    },
-                    child: const Text(
+                  const SizedBox(height: 22),
+
+                  // ===========================
+                  // SUGGESTED ISSUE
+                  // ===========================
+                  _buildSectionTitle("Suggested issue"),
+                  const SizedBox(height: 10),
+                  KeyedSubtree(
+                    key: issueKey,
+                    child: suggestedIssues.isEmpty
+                        ? _softCard(
+                            padding: const EdgeInsets.all(22),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  color: Colors.grey.shade400,
+                                  size: 28,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  equipmentNotListed
+                                      ? "Enable Equipment Not Listed to load global suggested issues."
+                                      : "Select equipment first to see suggested issues.",
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              ...visibleSuggestedIssues.map((issue) {
+                                final selected =
+                                    selectedSuggestedIssueId ==
+                                    issue["issue_template_id"];
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _optionCard(
+                                    title: issue["issue_template_name"]
+                                        .toString(),
+                                    subtitle: "Suggested template",
+                                    selected: selected,
+                                    onTap: () {
+                                      setState(() {
+                                        selectedSuggestedIssueId =
+                                            issue["issue_template_id"];
+                                        issueError = null;
+                                        descriptionError = null;
+                                      });
+                                    },
+                                  ),
+                                );
+                              }),
+                              if (equipmentNotListed &&
+                                  !showAllGlobalIssues &&
+                                  suggestedIssues.length > 5)
+                                _optionCard(
+                                  title:
+                                      "+${suggestedIssues.length - 5} more issues",
+                                  subtitle: "Browse all templates",
+                                  selected: false,
+                                  leading: const Icon(
+                                    Icons.search_rounded,
+                                    size: 22,
+                                    color: Color(0xFF111827),
+                                  ),
+                                  onTap: () {
+                                    showSelectionBottomSheet(
+                                      title: "Select Suggested Issue",
+                                      items: suggestedIssues,
+                                      selectedItem: selectedSuggestedIssueId,
+                                      icon: Icons.build_circle_outlined,
+                                      label: (item) =>
+                                          item["issue_template_name"],
+                                      onSelected: (item) {
+                                        issueError = null;
+                                        descriptionError = null;
+                                        setState(() {
+                                          selectedSuggestedIssueId =
+                                              item["issue_template_id"];
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                  ),
+                  if (issueError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 4),
+                      child: Text(
+                        issueError!,
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 22),
+
+                  // ===========================
+                  // DESCRIPTION
+                  // ===========================
+                  _buildSectionTitle("Description"),
+                  const SizedBox(height: 10),
+                  KeyedSubtree(
+                    key: descriptionKey,
+                    child: _softCard(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                      child: TextField(
+                        controller: descriptionController,
+                        maxLines: 5,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.45,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF111827),
+                        ),
+                        decoration: _minimalInputDecoration(
+                          hintText: "Describe the problem...",
+                          errorText: descriptionError,
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            14,
+                            16,
+                            14,
+                          ),
+                        ),
+                        onChanged: (_) {
+                          if (descriptionController.text.trim().isNotEmpty) {
+                            setState(() {
+                              descriptionError = null;
+                              issueError = null;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 22),
+
+                  // ===========================
+                  // PRIORITY
+                  // ===========================
+                  _buildSectionTitle("Priority"),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: priorities.map((item) {
+                      return Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            right: item == priorities.first ? 6 : 0,
+                            left: item == priorities.last ? 6 : 0,
+                          ),
+                          child: _buildPriorityCard(
+                            option: item,
+                            selected: priority == item.value,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 22),
+
+                  // ===========================
+                  // PHOTO
+                  // ===========================
+                  _buildSectionTitle("Photo (optional)"),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: pickImage,
+                    child: Container(
+                      height: 148,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: selectedImage == null
+                          ? const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  size: 34,
+                                  color: Color(0xFF111827),
+                                ),
+                                SizedBox(height: 10),
+                                Text(
+                                  "Add a photo",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  "PNG • JPG • JPEG",
+                                  style: TextStyle(
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: Image.file(
+                                selectedImage!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+
+          // ===========================
+          // BOTTOM CTA
+          // ===========================
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF111827),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  onPressed: () async {
+                    if (validateForm()) {
+                      await confirmSubmitReport();
+                    }
+                  },
+                  child: const Text(
                     "Submit Report",
                     style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      letterSpacing: -0.2,
                     ),
-                    ),
+                  ),
                 ),
-                ),
-
-            const SizedBox(height: 40),
-
-          ],
-        ),
-
-        ),
-
-        ),
-      
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1143,6 +651,8 @@ class _ReportScreenState extends State<ReportScreen> {
     employeeIdController.dispose();
 
     descriptionController.dispose();
+
+    equipmentController.dispose();
 
     super.dispose();
 
@@ -1378,9 +888,11 @@ class _ReportScreenState extends State<ReportScreen> {
         );
 
         if (confirmed == true) {
-
-            submitReport();
-
+            // Wait until the confirm dialog route is fully gone,
+            // otherwise the success/error alert may not appear.
+            await Future<void>.delayed(Duration.zero);
+            if (!mounted) return;
+            await submitReport();
         }
 
         }
@@ -1533,87 +1045,74 @@ class _ReportScreenState extends State<ReportScreen> {
             }
 
     Future<void> submitReport() async {
-
-        
-
         try {
-
             await api.submitReport(
-
             employeeId: employeeIdController.text.trim(),
-
             roomId: selectedRoomId!,
-
             equipmentId:
                 equipmentNotListed
                     ? null
                     : selectedEquipmentId,
-
             manualEquipmentName:
                 equipmentNotListed
                     ? equipmentController.text.trim()
                     : null,
-
             issueTemplateId:
                 selectedSuggestedIssueId,
-
             description:
                 descriptionController.text.trim(),
-
             priority:
                 priority,
-
             photo:
                 selectedImage,
-
             );
 
+            if (!mounted) return;
             await showSuccessDialog();
-
+            if (!mounted) return;
             resetForm();
 
         } catch (e) {
-
             String message = "Failed to submit report.";
 
             if (e is DioException) {
+                final data = e.response?.data;
 
-                if (e.response?.data is Map<String, dynamic>) {
-
-                message = e.response!.data["message"] ?? message;
-
-                } else if (e.response?.data is String) {
-
-                message = e.response!.data;
-
+                if (data is Map) {
+                  message = data["message"]?.toString() ?? message;
+                } else if (data is String) {
+                  final trimmed = data.trim();
+                  // Laravel sometimes returns an HTML error page instead of JSON.
+                  if (trimmed.startsWith("<!DOCTYPE") ||
+                      trimmed.startsWith("<html") ||
+                      trimmed.contains("<title>Laravel</title>")) {
+                    final status = e.response?.statusCode;
+                    message = status == null
+                        ? "Server error while submitting the report. Please try again."
+                        : "Server error ($status) while submitting the report. Please try again.";
+                  } else {
+                    message = trimmed.isEmpty ? message : trimmed;
+                  }
                 } else {
-
-                message = e.message ?? message;
-
+                  message = e.message ?? message;
                 }
 
                 // ============================
                 // Employee ID became invalid
                 // ============================
                 if (message.toLowerCase().contains("employee id")) {
-
                     setState(() {
-
                         reporterVerified = false;
                         reporterName = "";
                         reporterError = "Employee ID not found.";
                         employeeIdError = "Please enter a valid Employee ID.";
-
                     });
-
                 }
-
             }
 
+            if (!mounted) return;
             await showErrorDialog(message);
-
         }
-
         }
 
     void showSelectionBottomSheet({
@@ -1705,7 +1204,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
                             fontSize: 22,
 
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            color: Color(0xFF111827),
 
                             ),
 
@@ -1713,27 +1214,22 @@ class _ReportScreenState extends State<ReportScreen> {
 
                         const SizedBox(height: 18),
 
-                        TextField(
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: TextField(
 
                             autofocus: true,
 
-                            decoration: InputDecoration(
+                            decoration: _minimalInputDecoration(
 
                             hintText: "Search...",
 
                             prefixIcon: const Icon(
                                 Icons.search_rounded,
-                            ),
-
-                            filled: true,
-
-                            fillColor: const Color(0xffF8FAFC),
-
-                            border: OutlineInputBorder(
-
-                                borderRadius:
-                                    BorderRadius.circular(16),
-
+                                size: 20,
                             ),
 
                             ),
@@ -1748,6 +1244,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
                             },
 
+                        ),
                         ),
 
                         const SizedBox(height: 18),
@@ -1832,37 +1329,33 @@ class _ReportScreenState extends State<ReportScreen> {
                                     selectedItem ==
                                     item.values.first;
 
-                                return Card(
-
-                                elevation: 0,
+                                return Container(
 
                                 margin:
                                     const EdgeInsets.only(bottom: 10),
 
-                                shape: RoundedRectangleBorder(
-
-                                    borderRadius:
-                                        BorderRadius.circular(16),
-
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? const Color(0xFF111827)
+                                      : const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-
-                                color: selected
-                                    ? const Color(0xffEFF6FF)
-                                    : Colors.white,
 
                                 child: ListTile(
 
                                     leading: CircleAvatar(
 
-                                    backgroundColor:
-                                        const Color(0xffEFF6FF),
+                                    backgroundColor: selected
+                                        ? Colors.white.withValues(alpha: 0.12)
+                                        : Colors.white,
 
                                     child: Icon(
 
                                         icon,
 
-                                        color:
-                                            const Color(0xff2563EB),
+                                        color: selected
+                                            ? Colors.white
+                                            : const Color(0xFF111827),
 
                                     ),
 
@@ -1876,6 +1369,12 @@ class _ReportScreenState extends State<ReportScreen> {
 
                                     overflow:
                                         TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: selected
+                                          ? Colors.white
+                                          : const Color(0xFF111827),
+                                    ),
 
                                     ),
 
@@ -1885,8 +1384,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
                                             Icons.check_circle,
 
-                                            color:
-                                                Color(0xff2563EB),
+                                            color: Colors.white,
 
                                         )
 
@@ -1926,7 +1424,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
         );
 
-        }
+    }
 
         void _showError(String message) {
 
@@ -1945,90 +1443,66 @@ class _ReportScreenState extends State<ReportScreen> {
         }
 
         Future<void> showSuccessDialog() async {
+            if (!mounted) return;
 
             await showDialog(
-
                 context: context,
-
+                useRootNavigator: true,
                 barrierDismissible: false,
-
-                builder: (_) {
-
+                builder: (dialogContext) {
                     return AlertDialog(
-
                         icon: const Icon(
                             Icons.check_circle,
                             color: Colors.green,
                             size: 60,
                         ),
-
                         title: const Text(
                             "Report Submitted",
                         ),
-
                         content: const Text(
                             "Your maintenance report has been submitted successfully.",
                         ),
-
                         actions: [
-
                             FilledButton(
-
                                 onPressed: () {
-
-                                    Navigator.pop(context);
-
+                                    Navigator.of(dialogContext).pop();
                                 },
-
                                 child: const Text("OK"),
-
                             )
-
                         ],
-
                     );
-
                 },
-
             );
-
         }
 
         Future<void> showErrorDialog(String message) async {
+            if (!mounted) return;
 
             await showDialog(
-
                 context: context,
-
-                builder: (_) {
-
+                useRootNavigator: true,
+                barrierDismissible: false,
+                builder: (dialogContext) {
                     return AlertDialog(
-
                         icon: const Icon(
-
                             Icons.error,
-
                             color: Colors.red,
-
                             size: 60,
-
                         ),
-
                         title: const Text(
                             "Submission Failed",
                         ),
-
                         content: Text(message),
-
                         actions: [
-
                             FilledButton(
                                 onPressed: () {
-                                    Navigator.pop(context);
+                                    Navigator.of(dialogContext).pop();
 
                                     Future.delayed(
                                         const Duration(milliseconds: 200),
                                         () {
+                                            if (!mounted) return;
+
                                             if (employeeIdError != null) {
                                                 scrollToField(employeeKey);
                                             } else if (locationError != null) {
@@ -2043,18 +1517,12 @@ class _ReportScreenState extends State<ReportScreen> {
                                         },
                                     );
                                 },
-
                                 child: const Text("OK"),
                             )
-
                         ],
-
                     );
-
                 },
-
             );
-
         }
 
         void resetForm() {
@@ -2099,118 +1567,407 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _buildSectionTitle(String title) {
     return Text(
-      title.toUpperCase(),
+      title,
       style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 1,
-        color: Color(0xff1E293B),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
+        color: Color(0xFF6B7280),
       ),
     );
   }
 
-  
+  Widget _softCard({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 
-    Widget _buildPriorityCard({
+  Widget _rowDivider() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 18),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: Color(0xFFF3F4F6),
+      ),
+    );
+  }
 
-        required PriorityOption option,
-        required bool selected,
-
-    }) {
-        return InkWell(
-
-            borderRadius: BorderRadius.circular(18),
-
-            onTap: () {
-
-            setState(() {
-
-                priority = option.value;
-
-            });
-
-            },
-
-            child: AnimatedContainer(
-
-            duration: const Duration(milliseconds: 220),
-
-            padding: const EdgeInsets.all(16),
-
-            decoration: BoxDecoration(
-
-                color: selected
-                    ? const Color(0xffEFF6FF)
-                    : Colors.white,
-
-                borderRadius: BorderRadius.circular(18),
-
-                border: Border.all(
-
-                color: selected
-                    ? const Color(0xff2563EB)
-                    : const Color(0xffE2E8F0),
-
-                width: selected ? 2 : 1,
-
-                ),
-
-            ),
-
-            child: Column(
-
-                crossAxisAlignment: CrossAxisAlignment.start,
-
-                children: [
-
-                Icon(
-
-                    selected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-
-                    color: const Color(0xff2563EB),
-
-                ),
-
-                const SizedBox(height: 12),
-
-                Text(
-
-                    option.label,
-
-                    style: const TextStyle(
-
-                    fontWeight: FontWeight.bold,
-
-                    fontSize: 16,
-
+  Widget _selectRow({
+    required IconData icon,
+    required Color iconColor,
+    required String placeholder,
+    String? value,
+    String? errorText,
+    required VoidCallback onTap,
+  }) {
+    final hasValue = value != null && value.trim().isNotEmpty;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: iconColor, size: 22),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    hasValue ? value : placeholder,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                      color: hasValue
+                          ? const Color(0xFF111827)
+                          : const Color(0xFF9CA3AF),
                     ),
-
+                  ),
                 ),
-
-                const SizedBox(height: 6),
-
-                Text(
-
-                    option.description,
-
-                    style: const TextStyle(
-
-                    color: Color(0xff64748B),
-
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFD1D5DB),
+                ),
+              ],
+            ),
+            if (errorText != null) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 36),
+                child: Text(
+                  errorText,
+                  style: const TextStyle(
+                    color: Color(0xFFEF4444),
                     fontSize: 12,
-
-                    ),
-
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _textInputRow({
+    required IconData icon,
+    required Color iconColor,
+    required TextEditingController controller,
+    required String hint,
+    String? errorText,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 14, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                errorText: errorText,
+                hintStyle: const TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w400,
+                  fontSize: 15,
+                ),
+                errorStyle: const TextStyle(
+                  color: Color(0xFFEF4444),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _optionCard({
+    required String title,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+    Widget? leading,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF111827) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? 0.08 : 0.03),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: leading ??
+                  Icon(
+                    Icons.build_circle_outlined,
+                    size: 22,
+                    color: selected ? Colors.white : const Color(0xFF111827),
+                  ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: selected ? Colors.white : const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.65)
+                          : const Color(0xFF9CA3AF),
+                    ),
+                  ),
                 ],
-
+              ),
             ),
-
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.chevron_right_rounded,
+              color: selected
+                  ? Colors.white
+                  : const Color(0xFFD1D5DB),
             ),
+          ],
+        ),
+      ),
+    );
+  }
 
-        );
-        }
+  Widget _statusDot() {
+    Color color = const Color(0xFFD1D5DB);
+    if (isCheckingReporter) {
+      color = const Color(0xFFF59E0B);
+    } else if (reporterVerified) {
+      color = const Color(0xFF22C55E);
+    } else if (reporterError != null) {
+      color = const Color(0xFFEF4444);
+    }
+
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Widget _reporterStatusText() {
+    if (isCheckingReporter) {
+      return const Text(
+        "Verifying employee...",
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF6B7280),
+        ),
+      );
+    }
+    if (reporterVerified && reporterName.isNotEmpty) {
+      return Text(
+        reporterName,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF111827),
+        ),
+      );
+    }
+    if (reporterError != null) {
+      return Text(
+        reporterError!,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFFEF4444),
+        ),
+      );
+    }
+    return const Text(
+      "Waiting for valid Employee ID...",
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        color: Color(0xFF9CA3AF),
+      ),
+    );
+  }
+
+  InputDecoration _minimalInputDecoration({
+    String? labelText,
+    String? hintText,
+    String? errorText,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    EdgeInsetsGeometry? contentPadding,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      errorText: errorText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: Colors.transparent,
+      isDense: true,
+      contentPadding: contentPadding ??
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      labelStyle: const TextStyle(
+        color: Color(0xFF9CA3AF),
+        fontWeight: FontWeight.w500,
+        fontSize: 13,
+      ),
+      hintStyle: const TextStyle(
+        color: Color(0xFF9CA3AF),
+        fontWeight: FontWeight.w400,
+        fontSize: 14,
+      ),
+      errorStyle: const TextStyle(
+        color: Color(0xFFEF4444),
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+      prefixIconColor: const Color(0xFF9CA3AF),
+      suffixIconColor: const Color(0xFF9CA3AF),
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      errorBorder: InputBorder.none,
+      focusedErrorBorder: InputBorder.none,
+    );
+  }
+
+  Widget _buildPriorityCard({
+    required PriorityOption option,
+    required bool selected,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () {
+        setState(() {
+          priority = option.value;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF111827) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? 0.08 : 0.03),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+              color: selected ? Colors.white : const Color(0xFF111827),
+              size: 20,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              option.label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: selected ? Colors.white : const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              option.description,
+              style: TextStyle(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.65)
+                    : const Color(0xFF9CA3AF),
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

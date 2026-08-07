@@ -1,13 +1,40 @@
 import 'package:dio/dio.dart';
 import 'dart:io';
 import 'package:path/path.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
 
   static const String baseUrl =
-      "http://192.168.1.4:8000/api";
+      "http://192.168.1.22:8000/api";
 
-  final Dio dio = Dio();
+  final Dio dio = Dio(
+    BaseOptions(
+      headers: {
+        "Accept": "application/json",
+      },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+    ),
+  );
+
+  final FlutterSecureStorage storage =
+      const FlutterSecureStorage();
+
+    Future<void> loadToken() async {
+
+    final token = await storage.read(
+        key: "token",
+    );
+
+    if (token != null) {
+
+        dio.options.headers["Authorization"] =
+            "Bearer $token";
+
+    }
+
+    }
 
   Future<Map<String, dynamic>?> verifyReporter(
     String employeeId) async {
@@ -147,16 +174,10 @@ class ApiService {
 
         });
 
+        // Do not set content-type manually — Dio must add the multipart boundary.
         return await dio.post(
-
-            "$baseUrl/submit-report",
-
-            data: formData,
-
-            options: Options(
-            contentType: "multipart/form-data",
-            ),
-
+          "$baseUrl/submit-report",
+          data: formData,
         );
         }
 }
