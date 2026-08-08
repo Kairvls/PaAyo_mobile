@@ -1,36 +1,367 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
-class QRScannerScreen extends StatelessWidget {
+import '../../models/equipment.dart';
+import '../../services/maintenance_service.dart';
+import '../equipment/equipment_profile_screen.dart';
 
+enum _ScanPhase { scanning, found }
+
+class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  State<QRScannerScreen> createState() => _QRScannerScreenState();
+}
 
-    return Scaffold(
+class _QRScannerScreenState extends State<QRScannerScreen>
+    with SingleTickerProviderStateMixin {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  final MaintenanceService _service = MaintenanceService();
 
-      appBar: AppBar(
+  late final AnimationController _lineController;
 
-        title: const Text(
+  _ScanPhase _phase = _ScanPhase.scanning;
+  bool _handling = false;
 
-          "QR Scanner",
-
-        ),
-
-      ),
-
-      body: const Center(
-
-        child: Text(
-
-          "Scanner Coming Next",
-
-        ),
-
-      ),
-
-    );
-
+  @override
+  void initState() {
+    super.initState();
+    _lineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
   }
 
+  @override
+  void dispose() {
+    _lineController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_handling) return;
+    final code = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+    if (code == null) return;
+
+    _handling = true;
+    await _controller.stop();
+
+    Equipment equipment;
+    try {
+      // Keep showing "Scanning…" while we hit the API.
+      equipment = await _service.getEquipmentByQr(code);
+    } on EquipmentNotFoundException {
+      await _resumeWithMessage("No equipment matches this QR code.");
+      return;
+    } catch (_) {
+      await _resumeWithMessage(
+        "Couldn't reach the server. Check your connection.",
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _phase = _ScanPhase.found);
+
+    // Hold the "Equipment Found" state briefly before transitioning.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EquipmentProfileScreen(equipment: equipment),
+      ),
+    );
+
+    // Resume scanning when the user comes back.
+    if (!mounted) return;
+    setState(() => _phase = _ScanPhase.scanning);
+    _handling = false;
+    await _controller.start();
+  }
+
+  Future<void> _resumeWithMessage(String message) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+    setState(() => _phase = _ScanPhase.scanning);
+    _handling = false;
+    await _controller.start();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final found = _phase == _ScanPhase.found;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+          ),
+
+          // Dim overlay + scan window.
+          _ScannerOverlay(found: found, line: _lineController),
+
+          // Top bar.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _GlassButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.of(context).maybePop(),
+                  ),
+                  const Text(
+                    "Scan Equipment",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  _GlassButton(
+                    icon: Icons.flash_on_rounded,
+                    onTap: () => _controller.toggleTorch(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom status text / found badge.
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 48),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: found
+                      ? Column(
+                          key: const ValueKey("found"),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF16A34A),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                color: Colors.white,
+                                size: 36,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            const Text(
+                              "Equipment Found",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          key: const ValueKey("scanning"),
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            _PulsingDot(),
+                            SizedBox(height: 12),
+                            Text(
+                              "Scanning…",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              "Point the camera at the equipment QR code",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScannerOverlay extends StatelessWidget {
+  final bool found;
+  final Animation<double> line;
+
+  const _ScannerOverlay({required this.found, required this.line});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = found ? const Color(0xFF16A34A) : Colors.white;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = constraints.maxWidth * 0.7;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Darken everything except the centered window.
+            ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                Colors.black.withValues(alpha: 0.55),
+                BlendMode.srcOut,
+              ),
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      backgroundBlendMode: BlendMode.dstOut,
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      width: side,
+                      height: side,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Frame border.
+            Container(
+              width: side,
+              height: side,
+              decoration: BoxDecoration(
+                border: Border.all(color: accent, width: 3),
+                borderRadius: BorderRadius.circular(24),
+              ),
+            ),
+
+            // Animated scan line (hidden once found).
+            if (!found)
+              SizedBox(
+                width: side,
+                height: side,
+                child: AnimatedBuilder(
+                  animation: line,
+                  builder: (context, _) {
+                    return Align(
+                      alignment: Alignment(0, (line.value * 2) - 1),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
+                        height: 2.5,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              const Color(0xFF60A5FA),
+                              Colors.transparent,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF60A5FA)
+                                  .withValues(alpha: 0.6),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _GlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _GlassButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.18),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 1).animate(_c),
+      child: Container(
+        width: 14,
+        height: 14,
+        decoration: const BoxDecoration(
+          color: Color(0xFF60A5FA),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
 }

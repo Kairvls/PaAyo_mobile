@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -16,7 +15,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  Timer? _autoTimer;
   bool _navigating = false;
 
   late final AnimationController _enterController;
@@ -58,14 +56,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _enterController.forward();
-
-    _autoTimer = Timer(const Duration(milliseconds: 3200), _goHome);
   }
 
   Future<void> _goHome() async {
     if (_navigating || !mounted) return;
     _navigating = true;
-    _autoTimer?.cancel();
 
     await Navigator.of(context).pushReplacement(
       PageRouteBuilder(
@@ -81,7 +76,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _autoTimer?.cancel();
     _enterController.dispose();
     _pulseController.dispose();
     _skylineController.dispose();
@@ -170,7 +164,7 @@ class _SplashScreenState extends State<SplashScreen>
                     opacity: _fadeIn,
                     child: _GoPill(
                       pulse: _pulseController,
-                      onTap: _goHome,
+                      onSwipeUp: _goHome,
                     ),
                   ),
 
@@ -195,68 +189,117 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _GoPill extends StatelessWidget {
+class _GoPill extends StatefulWidget {
   final Animation<double> pulse;
-  final VoidCallback onTap;
+  final VoidCallback onSwipeUp;
 
   const _GoPill({
     required this.pulse,
-    required this.onTap,
+    required this.onSwipeUp,
   });
 
-  static const double _swipeThreshold = 48;
+  @override
+  State<_GoPill> createState() => _GoPillState();
+}
 
-  void _onVerticalDragEnd(DragEndDetails details) {
-    final dy = details.primaryVelocity ?? 0;
-    // Negative velocity = swipe up
-    if (dy < -_swipeThreshold) {
-      onTap();
+class _GoPillState extends State<_GoPill> {
+  static const double _knob = 52;
+  // Finger travel (px) needed to commit and navigate.
+  static const double _maxDrag = 64;
+
+  double _drag = 0; // 0.._maxDrag, accumulated upward drag
+  Duration _dur = Duration.zero;
+  bool _committed = false;
+
+  double get _progress => (_drag / _maxDrag).clamp(0.0, 1.0);
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_committed) return;
+    setState(() {
+      _dur = Duration.zero;
+      // Dragging up gives negative dy, which increases the accumulated drag.
+      _drag = (_drag - d.delta.dy).clamp(0.0, _maxDrag);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    if (_committed) return;
+    final v = d.primaryVelocity ?? 0; // negative = flick up
+    final commit = _progress >= 0.7 || v < -600;
+    if (commit) {
+      setState(() {
+        _committed = true;
+        _dur = const Duration(milliseconds: 150);
+        _drag = _maxDrag;
+      });
+      widget.onSwipeUp();
+    } else {
+      setState(() {
+        _dur = const Duration(milliseconds: 220);
+        _drag = 0;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: pulse,
-      builder: (context, child) {
-        final lift = -4.0 * pulse.value;
-        return Transform.translate(
-          offset: Offset(0, lift),
-          child: child,
-        );
-      },
-      child: GestureDetector(
-        onTap: onTap,
-        onVerticalDragEnd: _onVerticalDragEnd,
-        behavior: HitTestBehavior.opaque,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: Container(
-              width: 74,
-              padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(40),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.22),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(40),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: 74,
+          padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(40),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.22),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Hint arrows pulse and fade as you drag the button up.
+              AnimatedBuilder(
+                animation: widget.pulse,
+                builder: (context, child) {
+                  final lift = -3.0 * widget.pulse.value;
+                  return Transform.translate(
+                    offset: Offset(0, lift),
+                    child: Opacity(
+                      opacity: (1 - _progress) * 0.85 + 0.15,
+                      child: child,
+                    ),
+                  );
+                },
+                child: const Icon(
+                  Icons.keyboard_double_arrow_up_rounded,
+                  color: Colors.white,
+                  size: 22,
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.keyboard_double_arrow_up_rounded,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    size: 22,
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: 52,
-                    height: 52,
+              const SizedBox(height: 10),
+
+              // The Go button itself is swipable upward.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: _onDragUpdate,
+                onVerticalDragEnd: _onDragEnd,
+                child: AnimatedSlide(
+                  duration: _dur,
+                  curve: Curves.easeOut,
+                  // Lift the knob up to half its height as you drag.
+                  offset: Offset(0, -_progress * 0.5),
+                  child: Container(
+                    width: _knob,
+                    height: _knob,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: Color.lerp(
+                        const Color(0xFF0F172A),
+                        AppTheme.accentYellow,
+                        _progress * 0.9,
+                      ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -267,19 +310,23 @@ class _GoPill extends StatelessWidget {
                       ],
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
+                    child: Text(
                       "Go",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Color.lerp(
+                          Colors.white,
+                          const Color(0xFF0F172A),
+                          _progress,
+                        ),
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.2,
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

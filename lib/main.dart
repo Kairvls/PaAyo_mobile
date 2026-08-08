@@ -4,6 +4,7 @@ import 'theme/app_theme.dart';
 
 import 'screens/splash/splash_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/home/maintenance_home_screen.dart';
 import 'screens/report/report_screen.dart';
 import 'screens/qr/qr_scanner_screen.dart';
 import 'screens/equipment/equipment_screen.dart';
@@ -37,6 +38,8 @@ class PrismMobile extends StatelessWidget {
         '/': (_) => const SplashScreen(),
 
         '/home': (_) => const HomeScreen(),
+
+        '/dashboard': (_) => const MaintenanceHomeScreen(),
 
         '/login': (_) => const LoginScreen(),
 
