@@ -4,11 +4,22 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../equipment/equipment_profile_screen.dart';
+import '../history/equipment_history_screen.dart';
+import '../maintenance/record_maintenance_screen.dart';
+import '../schedule/equipment_schedule_screen.dart';
+
+/// Where to land after a successful equipment QR scan.
+enum ScanDestination { profile, record, history, schedule }
 
 enum _ScanPhase { scanning, found }
 
 class QRScannerScreen extends StatefulWidget {
-  const QRScannerScreen({super.key});
+  final ScanDestination destination;
+
+  const QRScannerScreen({
+    super.key,
+    this.destination = ScanDestination.profile,
+  });
 
   @override
   State<QRScannerScreen> createState() => _QRScannerScreenState();
@@ -16,6 +27,9 @@ class QRScannerScreen extends StatefulWidget {
 
 class _QRScannerScreenState extends State<QRScannerScreen>
     with SingleTickerProviderStateMixin {
+  static const _missLimit = 5;
+  static const _missCooldown = Duration(milliseconds: 1200);
+
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
@@ -25,6 +39,8 @@ class _QRScannerScreenState extends State<QRScannerScreen>
 
   _ScanPhase _phase = _ScanPhase.scanning;
   bool _handling = false;
+  int _missCount = 0;
+  String? _lastMissedCode;
 
   @override
   void initState() {
@@ -49,6 +65,9 @@ class _QRScannerScreenState extends State<QRScannerScreen>
         .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
     if (code == null) return;
 
+    // Ignore the same failed code until a different one is scanned.
+    if (_lastMissedCode != null && code == _lastMissedCode) return;
+
     _handling = true;
     await _controller.stop();
 
@@ -57,7 +76,23 @@ class _QRScannerScreenState extends State<QRScannerScreen>
       // Keep showing "Scanning…" while we hit the API.
       equipment = await _service.getEquipmentByQr(code);
     } on EquipmentNotFoundException {
-      await _resumeWithMessage("No equipment matches this QR code.");
+      _missCount += 1;
+      _lastMissedCode = code;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No equipment matches this QR code.")),
+      );
+      setState(() => _phase = _ScanPhase.scanning);
+
+      if (_missCount >= _missLimit) {
+        await _showTroubleSheet();
+        return;
+      }
+
+      await Future<void>.delayed(_missCooldown);
+      if (!mounted) return;
+      _handling = false;
+      await _controller.start();
       return;
     } catch (_) {
       await _resumeWithMessage(
@@ -65,6 +100,10 @@ class _QRScannerScreenState extends State<QRScannerScreen>
       );
       return;
     }
+
+    // Successful match — reset miss tracking.
+    _missCount = 0;
+    _lastMissedCode = null;
 
     if (!mounted) return;
     setState(() => _phase = _ScanPhase.found);
@@ -74,9 +113,7 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     if (!mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EquipmentProfileScreen(equipment: equipment),
-      ),
+      MaterialPageRoute(builder: (_) => _screenFor(equipment)),
     );
 
     // Resume scanning when the user comes back.
@@ -86,13 +123,124 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     await _controller.start();
   }
 
+  Widget _screenFor(Equipment equipment) {
+    switch (widget.destination) {
+      case ScanDestination.record:
+        return RecordMaintenanceScreen(equipment: equipment);
+      case ScanDestination.history:
+        return EquipmentHistoryScreen(equipment: equipment);
+      case ScanDestination.schedule:
+        return EquipmentScheduleScreen(equipment: equipment);
+      case ScanDestination.profile:
+        return EquipmentProfileScreen(equipment: equipment);
+    }
+  }
+
   Future<void> _resumeWithMessage(String message) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
     setState(() => _phase = _ScanPhase.scanning);
+
+    // Short cooldown so failed scans can't spam the API.
+    await Future<void>.delayed(_missCooldown);
+    if (!mounted) return;
+
     _handling = false;
+    await _controller.start();
+  }
+
+  Future<void> _showTroubleSheet() async {
+    await _controller.stop();
+    if (!mounted) return;
+
+    final keepScanning = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  size: 40,
+                  color: Color(0xFF0B2F64),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  "Having trouble scanning?",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "No matching equipment after several scans.\n"
+                  "Check lighting, hold steady, and aim at the equipment QR label.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0B2F64),
+                    ),
+                    child: const Text(
+                      "Keep scanning",
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("Close scanner"),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (keepScanning == false) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Reset and continue — user chose to keep trying.
+    _missCount = 0;
+    _lastMissedCode = null;
+    _handling = false;
+    setState(() => _phase = _ScanPhase.scanning);
     await _controller.start();
   }
 

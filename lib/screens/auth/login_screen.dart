@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/microsoft_auth_service.dart';
+import '../home/home_screen.dart';
 
 enum _LoginFeedbackKind {
   none,
@@ -21,6 +22,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _ink = Color(0xFF0F172A);
+  static const _muted = Color(0xFF64748B);
+  static const _soft = Color(0xFFF3F4F6);
+
   bool loading = false;
   _LoginFeedbackKind feedbackKind = _LoginFeedbackKind.none;
   String feedbackTitle = "";
@@ -59,7 +64,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _showFeedback(
         kind: _LoginFeedbackKind.cancelled,
         title: "Sign-in cancelled",
-        message: "You closed the Microsoft sign-in window. Tap the button below when you're ready to try again.",
+        message:
+            "You closed the Microsoft sign-in window. Tap below when you're ready to try again.",
       );
       return;
     }
@@ -77,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
         kind: _LoginFeedbackKind.denied,
         title: "Access not allowed",
         message:
-            "This Microsoft account is not authorized for equipment management.\n\nOnly STI College Ormoc Maintenance Personnel can continue. Please sign in with an approved work account.",
+            "This Microsoft account is not authorized for equipment management. Only STI College Ormoc Maintenance Personnel can continue.",
       );
       return;
     }
@@ -92,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         kind: _LoginFeedbackKind.network,
         title: "Connection problem",
         message:
-            "We couldn't reach the PaAyo server. Check your Wi‑Fi connection and try again.",
+            "We couldn't reach the PaAyo server. Check your Wi‑Fi and try again.",
       );
       return;
     }
@@ -207,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
           kind: _LoginFeedbackKind.denied,
           title: "Access not allowed",
           message:
-              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel in PaAyo.\n\nPlease use an authorized account or contact your administrator.",
+              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel in PaAyo. Please use an authorized account or contact your administrator.",
         );
       } else {
         _mapError(e);
@@ -224,12 +230,24 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _goBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(initialPage: 1),
+        ),
+      );
+    }
+  }
+
   Color get _feedbackColor {
     switch (feedbackKind) {
       case _LoginFeedbackKind.denied:
         return const Color(0xFFB91C1C);
       case _LoginFeedbackKind.cancelled:
-        return const Color(0xFF64748B);
+        return _muted;
       case _LoginFeedbackKind.network:
         return const Color(0xFFC2410C);
       case _LoginFeedbackKind.generic:
@@ -244,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case _LoginFeedbackKind.denied:
         return const Color(0xFFFEF2F2);
       case _LoginFeedbackKind.cancelled:
-        return const Color(0xFFF8FAFC);
+        return _soft;
       case _LoginFeedbackKind.network:
         return const Color(0xFFFFF7ED);
       case _LoginFeedbackKind.generic:
@@ -275,140 +293,141 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back button, top-left.
               Align(
                 alignment: Alignment.centerLeft,
                 child: Material(
-                  color: const Color(0xFFF1F5F9),
+                  color: _soft,
                   shape: const CircleBorder(),
                   child: InkWell(
                     customBorder: const CircleBorder(),
-                    onTap: () {
-                      // Pop back to the existing home so its carousel keeps
-                      // the page the user came from (e.g. Manage Equipment).
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        Navigator.pushReplacementNamed(context, "/home");
-                      }
-                    },
+                    onTap: _goBack,
                     child: const SizedBox(
                       width: 44,
                       height: 44,
                       child: Icon(
                         Icons.arrow_back_rounded,
                         size: 22,
-                        color: Color(0xFF0F172A),
+                        color: _ink,
                       ),
                     ),
                   ),
                 ),
               ),
-
-              // Centered illustration + heading + subtitle.
               Expanded(
                 child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
-                      _LoginIllustration(),
-                      const SizedBox(height: 36),
-                      const Text(
-                        "Hello !",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.5,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.sizeOf(context).height -
+                          MediaQuery.paddingOf(context).vertical -
+                          140,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          "assets/images/scan_login2.png",
+                          height: 220,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        "Sign in to report and manage campus\nequipment with your Office 365 account.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.5,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      if (feedbackKind != _LoginFeedbackKind.none) ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                          decoration: BoxDecoration(
-                            color: _feedbackBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: _feedbackColor.withValues(alpha: 0.18),
-                            ),
+                        const SizedBox(height: 28),
+                        const Text(
+                          "Sign in",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                            letterSpacing: -0.6,
+                            height: 1.15,
                           ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                _feedbackIcon,
-                                size: 34,
-                                color: _feedbackColor,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                feedbackTitle,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Use your Office 365 account to manage\ncampus equipment and maintenance.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                            color: _muted,
+                          ),
+                        ),
+                        if (feedbackKind != _LoginFeedbackKind.none) ...[
+                          const SizedBox(height: 22),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            decoration: BoxDecoration(
+                              color: _feedbackBackground,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  _feedbackIcon,
+                                  size: 20,
                                   color: _feedbackColor,
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                feedbackMessage,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  height: 1.45,
-                                  color: Color(0xFF475569),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        feedbackTitle,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: _feedbackColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        feedbackMessage,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          height: 1.4,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-
-                      const SizedBox(height: 80),
-
-                      // Primary Office 365 login button.
-                      _Office365Button(
-                        loading: loading,
-                        denied: feedbackKind == _LoginFeedbackKind.denied,
-                        onPressed: loading ? null : login,
-                      ),
-                    ],
+                    ),
                   ),
+                ),
+              ),
+              _Office365Button(
+                loading: loading,
+                denied: feedbackKind == _LoginFeedbackKind.denied,
+                onPressed: loading ? null : login,
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                "Maintenance Personnel only",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF94A3B8),
                 ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LoginIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      "assets/images/scan_person.png",
-      height: 280,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
     );
   }
 }
@@ -427,55 +446,51 @@ class _Office365Button extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = loading
-        ? "Signing In..."
+        ? "Signing in…"
         : denied
             ? "Try another account"
-            : "Log in with Office 365";
+            : "Continue with Microsoft";
 
-    return Opacity(
-      opacity: onPressed == null ? 0.7 : 1,
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
       child: Material(
-        color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(14),
-            child: SizedBox(
-              height: 58,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (loading)
-                    const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFF111827)),
-                      ),
-                    )
-                  else
-                    Image.asset(
-                      "assets/images/microsoft_logo.png",
-                      width: 22,
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Opacity(
+            opacity: onPressed == null ? 0.72 : 1,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (loading)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
-                  const SizedBox(width: 12),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
-                      letterSpacing: 0.2,
-                    ),
+                  )
+                else
+                  Image.asset(
+                    "assets/images/microsoft_logo.png",
+                    width: 22,
+                    height: 22,
+                    fit: BoxFit.contain,
                   ),
-                ],
-              ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

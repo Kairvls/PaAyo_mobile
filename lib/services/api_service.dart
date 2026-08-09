@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
 
   static const String baseUrl =
-      "http://192.168.1.7:8000/api";
+      "http://192.168.1.9:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -174,10 +174,15 @@ class ApiService {
 
         });
 
-        // Do not set content-type manually — Dio must add the multipart boundary.
         return await dio.post(
           "$baseUrl/submit-report",
           data: formData,
+          options: Options(
+            sendTimeout: const Duration(seconds: 45),
+            receiveTimeout: const Duration(seconds: 45),
+            // Fail fast on connect so the UI can recover quickly on bad network.
+            receiveDataWhenStatusError: true,
+          ),
         );
         }
 }

@@ -42,6 +42,7 @@ dependencies:
 
   flutter_appauth: ^12.0.2
   flutter_secure_storage: ^9.2.2
+  qr_flutter: ^4.1.0
   
 
 dev_dependencies:
@@ -70,6 +71,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/equipment/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -102,28 +104,29 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_native_splash:
-
-  color: "#FFFFFF"
-
-  background_image: assets/images/native_splash_paayo.png
-
+  # FoodGo-style: navy field + centered PaAyo logo + buildings bottom-left.
+  color: "#0F172A"
+  image: assets/images/native_splash_logo.png
+  branding: assets/images/native_splash_buildings.png
+  branding_mode: bottomLeft
+  branding_bottom_padding: 0
   android: true
-
   ios: true
-
   web: false
-
+  fullscreen: true
   android_12:
-
-    color: "#FFFFFF"
-
-    image: assets/images/native_splash_paayo.png
+    color: "#0F172A"
+    image: assets/images/native_splash_android12.png
+    icon_background_color: "#0F172A"
+    # Android 12 only allows a tiny centered branding strip (800x320),
+    # which cannot match the FoodGo bottom-left look — omit it and
+    # continue the layout on the Flutter SplashScreen instead.
 
 
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/native_splash_paayo.png"
+  image_path: "assets/images/native_splash_paayo_logo.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/native_splash_paayo.png"
+  adaptive_icon_foreground: "assets/images/native_splash_paayo_logo.png"

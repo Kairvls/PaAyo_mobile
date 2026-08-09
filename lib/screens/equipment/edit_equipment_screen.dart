@@ -14,8 +14,8 @@ class EditEquipmentScreen extends StatefulWidget {
 
 class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
   static const _ink = Color(0xFF0F172A);
-  static const _muted = Color(0xFF64748B);
-  static const _bg = Color(0xFFF3F4F6);
+  static const _muted = Color(0xFF94A3B8);
+  static const _bg = Color(0xFFF4F6F8);
   static const _blue = Color(0xFF2563EB);
 
   // Allowed values enforced by the API validator.
@@ -100,7 +100,6 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
         return;
       }
 
-      // Re-fetch the full (joined) profile so the caller shows fresh data.
       final refreshed =
           await _service.getEquipmentByQr(widget.equipment.qrId);
 
@@ -123,80 +122,178 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        elevation: 0,
-        foregroundColor: _ink,
-        title: const Text(
-          "Edit Information",
-          style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      body: Stack(
         children: [
-          Text(
-            widget.equipment.name,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _ink,
-            ),
-          ),
-          Text(
-            "QR ID · ${widget.equipment.qrId}",
-            style: const TextStyle(fontSize: 12.5, color: _muted),
-          ),
-          const SizedBox(height: 20),
-
-          _field("Asset Tag", _assetTag, "e.g. AC-2024-014"),
-          _field("Brand", _brand, "e.g. Panasonic"),
-          _field("Model", _model, "e.g. CS-XN12"),
-          _field("Serial Number", _serial, "e.g. SN-88213-KX"),
-          _field("Current Location", _location, "Optional"),
-
-          const SizedBox(height: 6),
-          _sectionLabel("Condition"),
-          const SizedBox(height: 10),
-          _choiceCard(_conditions, _condition,
-              (v) => setState(() => _condition = v)),
-          const SizedBox(height: 22),
-
-          _sectionLabel("Inventory Status"),
-          const SizedBox(height: 10),
-          _choiceCard(_inventoryStatuses, _inventoryStatus,
-              (v) => setState(() => _inventoryStatus = v)),
-          const SizedBox(height: 28),
-
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: _blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.of(context).padding.top + 78,
                 ),
               ),
-              child: _saving
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      "Save Changes",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.equipment.name,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                            letterSpacing: -0.3,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.equipment.qrId,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: _muted,
+                          ),
+                        ),
+                        const SizedBox(height: 26),
+                        _field("Asset Tag", _assetTag, "e.g. AC-2024-014"),
+                        _field("Brand", _brand, "e.g. Panasonic"),
+                        _field("Model", _model, "e.g. CS-XN12"),
+                        _field("Serial Number", _serial, "e.g. SN-88213-KX"),
+                        _field(
+                          "Current Location",
+                          _location,
+                          "Optional room or area",
+                        ),
+                        const SizedBox(height: 8),
+                        _sectionLabel("Condition"),
+                        const SizedBox(height: 12),
+                        _pillChoices(
+                          _conditions,
+                          _condition,
+                          (v) => setState(() => _condition = v),
+                        ),
+                        const SizedBox(height: 22),
+                        _sectionLabel("Inventory Status"),
+                        const SizedBox(height: 12),
+                        _pillChoices(
+                          _inventoryStatuses,
+                          _inventoryStatus,
+                          (v) => setState(() => _inventoryStatus = v),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                  child: Row(
+                    children: [
+                      _RoundIconButton(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onTap: () => Navigator.pop(context),
+                      ),
+                      const Spacer(),
+                      const Text(
+                        "Edit Information",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                      ),
+                      const Spacer(),
+                      const SizedBox(width: 42),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _blue,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            _blue.withValues(alpha: 0.55),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              "Save Changes",
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -206,24 +303,33 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
 
   Widget _field(String label, TextEditingController c, String hint) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionLabel(label),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: TextField(
               controller: c,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: _ink,
+              ),
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: hint,
-                hintStyle: const TextStyle(color: _muted),
+                hintStyle: const TextStyle(
+                  color: _muted,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -235,60 +341,71 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
   Widget _sectionLabel(String text) => Text(
         text,
         style: const TextStyle(
-          fontSize: 14,
+          fontSize: 13.5,
           fontWeight: FontWeight.w800,
           color: _ink,
         ),
       );
 
-  Widget _choiceCard(
+  Widget _pillChoices(
     List<String> options,
     String selected,
     ValueChanged<String> onChanged,
   ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < options.length; i++) ...[
-            InkWell(
-              onTap: () => onChanged(options[i]),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    Icon(
-                      selected == options[i]
-                          ? Icons.radio_button_checked_rounded
-                          : Icons.radio_button_off_rounded,
-                      color: selected == options[i]
-                          ? _blue
-                          : const Color(0xFFCBD5E1),
-                      size: 22,
-                    ),
-                    const SizedBox(width: 14),
-                    Text(
-                      options[i],
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: selected == options[i]
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: _ink,
-                      ),
-                    ),
-                  ],
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final option in options)
+          GestureDetector(
+            onTap: () => onChanged(option),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: selected == option ? _blue : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: selected == option
+                      ? _blue
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Text(
+                option,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected == option ? Colors.white : _ink,
                 ),
               ),
             ),
-            if (i != options.length - 1)
-              const Divider(height: 1, indent: 52),
-          ],
-        ],
+          ),
+      ],
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RoundIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF1F5F9),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
+        ),
       ),
     );
   }

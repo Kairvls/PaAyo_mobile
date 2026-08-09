@@ -30,6 +30,12 @@ class PriorityOption {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
+    static const _ink = Color(0xFF0F172A);
+    static const _muted = Color(0xFF64748B);
+    static const _soft = Color(0xFFF3F4F6);
+    static const _blue = Color(0xFF2563EB);
+    static const _chip = Color(0xFFEAF1FF);
+
     String issueSearch = "";
     Timer? _issueSearchTimer;
     Timer? _locationSearchTimer;
@@ -150,45 +156,44 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFFF3F4F6),
-        foregroundColor: const Color(0xFF111827),
-        titleSpacing: 8,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: _ink,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 0,
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Maintenance Report",
+              "Report an issue",
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 22,
-                letterSpacing: -0.4,
-                color: Color(0xFF111827),
+                fontSize: 20,
+                letterSpacing: -0.5,
+                color: _ink,
               ),
             ),
             SizedBox(height: 2),
             Text(
-              "Report broken or faulty equipment.",
+              "Broken or faulty campus equipment",
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF9CA3AF),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: _muted,
               ),
             ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      body: SingleChildScrollView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                   // ===========================
                   // REPORTER CARD
                   // ===========================
@@ -201,7 +206,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           key: employeeKey,
                           child: _textInputRow(
                             icon: Icons.badge_outlined,
-                            iconColor: const Color(0xFF111827),
+                            iconColor: _blue,
                             controller: employeeIdController,
                             hint: "Enter Employee ID",
                             errorText: employeeIdError,
@@ -253,7 +258,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           key: locationKey,
                           child: _selectRow(
                             icon: Icons.location_on_rounded,
-                            iconColor: const Color(0xFF111827),
+                            iconColor: _blue,
                             value: selectedLocation,
                             placeholder: "Select location",
                             errorText: locationError,
@@ -282,7 +287,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           child: equipmentNotListed
                               ? _textInputRow(
                                   icon: Icons.devices_other_rounded,
-                                  iconColor: const Color(0xFFEF4444),
+                                  iconColor: _blue,
                                   controller: equipmentController,
                                   hint: "Enter equipment name",
                                   errorText: equipmentError,
@@ -294,7 +299,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                 )
                               : _selectRow(
                                   icon: Icons.devices_other_rounded,
-                                  iconColor: const Color(0xFFEF4444),
+                                  iconColor: _blue,
                                   value: selectedEquipment,
                                   placeholder: "Select equipment",
                                   errorText: equipmentError,
@@ -348,13 +353,13 @@ class _ReportScreenState extends State<ReportScreen> {
                         }
                       },
                       activeThumbColor: Colors.white,
-                      activeTrackColor: const Color(0xFF111827),
+                      activeTrackColor: _blue,
                       title: const Text(
                         "Equipment not listed",
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          color: Color(0xFF111827),
+                          color: _ink,
                         ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -430,7 +435,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                   leading: const Icon(
                                     Icons.search_rounded,
                                     size: 22,
-                                    color: Color(0xFF111827),
+                                    color: _blue,
                                   ),
                                   onTap: () {
                                     showSelectionBottomSheet(
@@ -485,7 +490,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           fontSize: 14,
                           height: 1.45,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF111827),
+                          color: _ink,
                         ),
                         decoration: _minimalInputDecoration(
                           hintText: "Describe the problem...",
@@ -547,14 +552,8 @@ class _ReportScreenState extends State<ReportScreen> {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE8EEF5)),
                       ),
                       child: selectedImage == null
                           ? const Column(
@@ -562,8 +561,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               children: [
                                 Icon(
                                   Icons.add_photo_alternate_outlined,
-                                  size: 34,
-                                  color: Color(0xFF111827),
+                                  size: 32,
+                                  color: _blue,
                                 ),
                                 SizedBox(height: 10),
                                 Text(
@@ -571,21 +570,22 @@ class _ReportScreenState extends State<ReportScreen> {
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15,
-                                    color: Color(0xFF111827),
+                                    color: _ink,
                                   ),
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  "PNG • JPG • JPEG",
+                                  "PNG · JPG · JPEG",
                                   style: TextStyle(
-                                    color: Color(0xFF9CA3AF),
+                                    color: _muted,
                                     fontSize: 12,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
                             )
                           : ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(19),
                               child: Image.file(
                                 selectedImage!,
                                 fit: BoxFit.cover,
@@ -596,50 +596,43 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 24),
+
+                  // ===========================
+                  // SUBMIT
+                  // ===========================
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _blue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () async {
+                        if (validateForm()) {
+                          await confirmSubmitReport();
+                        }
+                      },
+                      child: const Text(
+                        "Submit report",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 12),
                 ],
               ),
             ),
-          ),
-
-          // ===========================
-          // BOTTOM CTA
-          // ===========================
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF111827),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                  ),
-                  onPressed: () async {
-                    if (validateForm()) {
-                      await confirmSubmitReport();
-                    }
-                  },
-                  child: const Text(
-                    "Submit Report",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -798,34 +791,76 @@ class _ReportScreenState extends State<ReportScreen> {
 
         final source = await showModalBottomSheet<ImageSource>(
             context: context,
-            builder: (context) => SafeArea(
-            child: Wrap(
-                children: [
-
-                ListTile(
-                    leading: const Icon(Icons.camera_alt),
-                    title: const Text("Take Photo"),
-                    onTap: () =>
-                        Navigator.pop(context, ImageSource.camera),
+            backgroundColor: Colors.transparent,
+            barrierColor: const Color(0x660F172A),
+            isScrollControlled: true,
+            builder: (context) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "Add a photo",
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _sheetActionTile(
+                            icon: Icons.photo_camera_rounded,
+                            title: "Take photo",
+                            subtitle: "Use your camera",
+                            onTap: () =>
+                                Navigator.pop(context, ImageSource.camera),
+                          ),
+                          const SizedBox(height: 8),
+                          _sheetActionTile(
+                            icon: Icons.photo_library_rounded,
+                            title: "Choose from gallery",
+                            subtitle: "Pick an existing image",
+                            onTap: () =>
+                                Navigator.pop(context, ImageSource.gallery),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-
-                ListTile(
-                    leading: const Icon(Icons.photo_library),
-                    title: const Text("Choose from Gallery"),
-                    onTap: () =>
-                        Navigator.pop(context, ImageSource.gallery),
-                ),
-
-                ],
-            ),
-            ),
+              );
+            },
         );
 
         if (source == null) return;
 
         final image = await picker.pickImage(
             source: source,
-            imageQuality: 80,
+            imageQuality: 55,
+            maxWidth: 1280,
+            maxHeight: 1280,
         );
 
         if (image == null) return;
@@ -836,66 +871,406 @@ class _ReportScreenState extends State<ReportScreen> {
         }
 
     Future<void> confirmSubmitReport() async {
-
-        final confirmed = await showDialog<bool>(
-
+        final submitted = await showDialog<bool>(
             context: context,
+            barrierDismissible: false,
+            barrierColor: const Color(0x660F172A),
+            builder: (dialogContext) {
+              var phase = "confirm"; // confirm | submitting | success | error
+              String errorMessage = "Failed to submit report.";
+              var isSending = false;
 
-            builder: (context) {
+              return StatefulBuilder(
+                builder: (context, setDialogState) {
+                  Future<void> sendReport() async {
+                    if (isSending) return;
+                    isSending = true;
+                    setDialogState(() => phase = "submitting");
 
-            return AlertDialog(
+                    try {
+                      await api.submitReport(
+                        employeeId: employeeIdController.text.trim(),
+                        roomId: selectedRoomId!,
+                        equipmentId: equipmentNotListed
+                            ? null
+                            : selectedEquipmentId,
+                        manualEquipmentName: equipmentNotListed
+                            ? equipmentController.text.trim()
+                            : null,
+                        issueTemplateId: selectedSuggestedIssueId,
+                        description: descriptionController.text.trim(),
+                        priority: priority,
+                        photo: selectedImage,
+                      );
+                      if (!dialogContext.mounted) return;
+                      setDialogState(() => phase = "success");
+                    } catch (e) {
+                      errorMessage = "Failed to submit report.";
 
-                title: const Text(
-                "Submit Maintenance Report?"
-                ),
+                      if (e is DioException) {
+                        final data = e.response?.data;
 
-                content: const Text(
-                "Are you sure you want to submit this maintenance report?"
-                ),
+                        if (data is Map) {
+                          errorMessage =
+                              data["message"]?.toString() ?? errorMessage;
+                        } else if (data is String) {
+                          final trimmed = data.trim();
+                          if (trimmed.startsWith("<!DOCTYPE") ||
+                              trimmed.startsWith("<html") ||
+                              trimmed.contains("<title>Laravel</title>")) {
+                            final status = e.response?.statusCode;
+                            errorMessage = status == null
+                                ? "Server error while submitting the report. Please try again."
+                                : "Server error ($status) while submitting the report. Please try again.";
+                          } else {
+                            errorMessage =
+                                trimmed.isEmpty ? errorMessage : trimmed;
+                          }
+                        } else {
+                          errorMessage = e.message ?? errorMessage;
+                        }
 
-                actions: [
+                        if (errorMessage.toLowerCase().contains("employee id") &&
+                            mounted) {
+                          setState(() {
+                            reporterVerified = false;
+                            reporterName = "";
+                            reporterError = "Employee ID not found.";
+                            employeeIdError =
+                                "Please enter a valid Employee ID.";
+                          });
+                        }
+                      }
 
-                TextButton(
+                      if (!dialogContext.mounted) return;
+                      isSending = false;
+                      setDialogState(() => phase = "error");
+                    }
+                  }
 
-                    onPressed: () {
+                  Widget iconBubble({
+                    required Color bg,
+                    required IconData icon,
+                    required Color iconColor,
+                    Widget? child,
+                  }) {
+                    return Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: bg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: child ??
+                          Icon(icon, color: iconColor, size: 24),
+                    );
+                  }
 
-                    Navigator.pop(context, false);
+                  if (phase == "submitting") {
+                    return Dialog(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      insetPadding:
+                          const EdgeInsets.symmetric(horizontal: 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.fromLTRB(22, 30, 22, 28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                color: _blue,
+                              ),
+                            ),
+                            SizedBox(height: 18),
+                            Text(
+                              "Submitting report…",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: _ink,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              "Please wait a moment.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
 
-                    },
+                  if (phase == "success") {
+                    return Dialog(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      insetPadding:
+                          const EdgeInsets.symmetric(horizontal: 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            iconBubble(
+                              bg: const Color(0xFFECFDF5),
+                              icon: Icons.check_rounded,
+                              iconColor: const Color(0xFF059669),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "Report submitted",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Your maintenance report was sent successfully.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: _muted,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: FilledButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, true),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _blue,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Done",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
 
-                    child: const Text("Cancel"),
+                  if (phase == "error") {
+                    return Dialog(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      insetPadding:
+                          const EdgeInsets.symmetric(horizontal: 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            iconBubble(
+                              bg: const Color(0xFFFEF2F2),
+                              icon: Icons.error_outline_rounded,
+                              iconColor: const Color(0xFFDC2626),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "Submit failed",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              errorMessage,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: _muted,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: FilledButton(
+                                onPressed: sendReport,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _blue,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Try again",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, false),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: _muted,
+                                ),
+                                child: const Text(
+                                  "Close",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
 
-                ),
-
-                FilledButton(
-
-                    onPressed: () {
-
-                    Navigator.pop(context, true);
-
-                    },
-
-                    child: const Text("Submit"),
-
-                ),
-
-                ],
-
-            );
-
+                  return Dialog(
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    insetPadding:
+                        const EdgeInsets.symmetric(horizontal: 36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          iconBubble(
+                            bg: _chip,
+                            icon: Icons.send_rounded,
+                            iconColor: _blue,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Submit report?",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: _ink,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Your maintenance report will be sent for review.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: _muted,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: FilledButton(
+                              onPressed: sendReport,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _blue,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                "Submit",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              style: TextButton.styleFrom(
+                                foregroundColor: _muted,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                "Cancel",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
             },
-
         );
 
-        if (confirmed == true) {
-            // Wait until the confirm dialog route is fully gone,
-            // otherwise the success/error alert may not appear.
-            await Future<void>.delayed(Duration.zero);
-            if (!mounted) return;
-            await submitReport();
+        if (submitted == true && mounted) {
+          resetForm();
         }
+    }
 
-        }
 
         
 
@@ -1044,386 +1419,421 @@ class _ReportScreenState extends State<ReportScreen> {
             }
             }
 
-    Future<void> submitReport() async {
-        try {
-            await api.submitReport(
-            employeeId: employeeIdController.text.trim(),
-            roomId: selectedRoomId!,
-            equipmentId:
-                equipmentNotListed
-                    ? null
-                    : selectedEquipmentId,
-            manualEquipmentName:
-                equipmentNotListed
-                    ? equipmentController.text.trim()
-                    : null,
-            issueTemplateId:
-                selectedSuggestedIssueId,
-            description:
-                descriptionController.text.trim(),
-            priority:
-                priority,
-            photo:
-                selectedImage,
-            );
-
-            if (!mounted) return;
-            await showSuccessDialog();
-            if (!mounted) return;
-            resetForm();
-
-        } catch (e) {
-            String message = "Failed to submit report.";
-
-            if (e is DioException) {
-                final data = e.response?.data;
-
-                if (data is Map) {
-                  message = data["message"]?.toString() ?? message;
-                } else if (data is String) {
-                  final trimmed = data.trim();
-                  // Laravel sometimes returns an HTML error page instead of JSON.
-                  if (trimmed.startsWith("<!DOCTYPE") ||
-                      trimmed.startsWith("<html") ||
-                      trimmed.contains("<title>Laravel</title>")) {
-                    final status = e.response?.statusCode;
-                    message = status == null
-                        ? "Server error while submitting the report. Please try again."
-                        : "Server error ($status) while submitting the report. Please try again.";
-                  } else {
-                    message = trimmed.isEmpty ? message : trimmed;
-                  }
-                } else {
-                  message = e.message ?? message;
-                }
-
-                // ============================
-                // Employee ID became invalid
-                // ============================
-                if (message.toLowerCase().contains("employee id")) {
-                    setState(() {
-                        reporterVerified = false;
-                        reporterName = "";
-                        reporterError = "Employee ID not found.";
-                        employeeIdError = "Please enter a valid Employee ID.";
-                    });
-                }
-            }
-
-            if (!mounted) return;
-            await showErrorDialog(message);
-        }
-        }
-
-    void showSelectionBottomSheet({
-
+    Future<void> showSelectionBottomSheet({
         required String title,
-
         required List<dynamic> items,
-
         required String Function(dynamic) label,
-
         required Function(dynamic) onSelected,
-
         required IconData icon,
-
         required dynamic selectedItem,
-
-        }) {
-
+        }) async {
         String search = "";
+        final searchController = TextEditingController();
+        final searchFocus = FocusNode();
 
-        showModalBottomSheet(
+        void dismissKeyboard() {
+          searchFocus.unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
 
+        await showModalBottomSheet(
             context: context,
-
             isScrollControlled: true,
-
+            useSafeArea: true,
             backgroundColor: Colors.transparent,
-
+            barrierColor: const Color(0x660F172A),
             builder: (context) {
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
             return StatefulBuilder(
-
                 builder: (context, setBottomState) {
-
                 final filtered = items.where((item) {
-
                     return label(item)
                         .toLowerCase()
                         .contains(search.toLowerCase());
-
                 }).toList();
 
-                return Container(
-
-                    height: MediaQuery.of(context).size.height * .78,
-
-                    decoration: const BoxDecoration(
-
-                    color: Colors.white,
-
-                    borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(28),
-                    ),
-
-                    ),
-
-                    child: Padding(
-
-                    padding: const EdgeInsets.all(20),
-
-                    child: Column(
-
-                        children: [
-
-                        Container(
-
-                            width: 45,
-
-                            height: 5,
-
-                            decoration: BoxDecoration(
-
-                            color: Colors.grey.shade300,
-
-                            borderRadius:
-                                BorderRadius.circular(100),
-
-                            ),
-
+                return AnimatedPadding(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Material(
+                        color: Colors.white,
+                        elevation: 0,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28),
                         ),
-
-                        const SizedBox(height: 18),
-
-                        Text(
-
-                            title,
-
-                            style: const TextStyle(
-
-                            fontSize: 22,
-
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.4,
-                            color: Color(0xFF111827),
-
-                            ),
-
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: TextField(
-
-                            autofocus: true,
-
-                            decoration: _minimalInputDecoration(
-
-                            hintText: "Search...",
-
-                            prefixIcon: const Icon(
-                                Icons.search_rounded,
-                                size: 20,
-                            ),
-
-                            ),
-
-                            onChanged: (value) {
-
-                            setBottomState(() {
-
-                                search = value;
-
-                            });
-
-                            },
-
-                        ),
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        Expanded(
-
-                        child: filtered.isEmpty
-
-                            ? Align(
-
-                                alignment: Alignment.topCenter,
-
-                                child: Padding(
-
-                                    padding: const EdgeInsets.only(top: 70),
-
-                                    child: Column(
-
-                                        mainAxisSize: MainAxisSize.min,
-
-                                        children: const [
-
-                                            Icon(
-
-                                                Icons.search_off_rounded,
-
-                                                size: 56,
-
-                                                color: Color(0xffCBD5E1),
-
-                                            ),
-
-                                            SizedBox(height: 14),
-
-                                            Text(
-
-                                                "No results found",
-
-                                                style: TextStyle(
-
-                                                    fontSize: 18,
-
-                                                    fontWeight: FontWeight.w600,
-
-                                                    color: Color(0xff475569),
-
-                                                ),
-
-                                            ),
-
-                                            SizedBox(height: 6),
-
-                                            Text(
-
-                                                "Try another keyword.",
-
-                                                style: TextStyle(
-
-                                                    color: Color(0xff94A3B8),
-
-                                                ),
-
-                                            ),
-
-                                        ],
-
-                                    ),
-
-                                ),
-
-                            )
-
-                            :ListView.builder(
-
-                            itemCount: filtered.length,
-
-                            itemBuilder: (_, index) {
-
-                                final item = filtered[index];
-
-                                final selected =
-                                    selectedItem ==
-                                    item.values.first;
-
-                                return Container(
-
-                                margin:
-                                    const EdgeInsets.only(bottom: 10),
-
+                        clipBehavior: Clip.antiAlias,
+                        child: SizedBox(
+                          height: MediaQuery.sizeOf(context).height * 0.78,
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 10),
+                              Container(
+                                width: 36,
+                                height: 4,
                                 decoration: BoxDecoration(
-                                  color: selected
-                                      ? const Color(0xFF111827)
-                                      : const Color(0xFFF3F4F6),
-                                  borderRadius: BorderRadius.circular(18),
+                                  color: const Color(0xFFE2E8F0),
+                                  borderRadius: BorderRadius.circular(99),
                                 ),
-
-                                child: ListTile(
-
-                                    leading: CircleAvatar(
-
-                                    backgroundColor: selected
-                                        ? Colors.white.withValues(alpha: 0.12)
-                                        : Colors.white,
-
-                                    child: Icon(
-
-                                        icon,
-
-                                        color: selected
-                                            ? Colors.white
-                                            : const Color(0xFF111827),
-
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.4,
+                                          color: _ink,
+                                        ),
+                                      ),
                                     ),
-
+                                    IconButton(
+                                      onPressed: () {
+                                        dismissKeyboard();
+                                        Navigator.pop(context);
+                                      },
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: _soft,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        color: _muted,
+                                        size: 20,
+                                      ),
                                     ),
-
-                                    title: Text(
-
-                                    label(item),
-
-                                    maxLines: 1,
-
-                                    overflow:
-                                        TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: selected
-                                          ? Colors.white
-                                          : const Color(0xFF111827),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                                child: Container(
+                                  height: 52,
+                                  padding: const EdgeInsets.only(left: 16, right: 6),
+                                  decoration: BoxDecoration(
+                                    color: _soft,
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.search_rounded,
+                                        size: 22,
+                                        color: _muted,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: searchController,
+                                          focusNode: searchFocus,
+                                          autofocus: false,
+                                          onChanged: (value) {
+                                            setBottomState(() => search = value);
+                                          },
+                                          style: const TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: _ink,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            isCollapsed: true,
+                                            border: InputBorder.none,
+                                            hintText: "Search...",
+                                            hintStyle: TextStyle(
+                                              color: _muted,
+                                              fontWeight: FontWeight.w400,
+                                              fontSize: 14.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (search.isNotEmpty) ...[
+                                        GestureDetector(
+                                          onTap: () {
+                                            searchController.clear();
+                                            setBottomState(() => search = "");
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.only(right: 4),
+                                            child: Icon(
+                                              Icons.cancel_rounded,
+                                              size: 18,
+                                              color: Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      Container(
+                                        width: 1,
+                                        height: 22,
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                        ),
+                                        color: const Color(0xFFCBD5E1),
+                                      ),
+                                      IconButton(
+                                        tooltip: "Filter",
+                                        onPressed: () {},
+                                        icon: const Icon(
+                                          Icons.tune_rounded,
+                                          color: _muted,
+                                          size: 22,
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 180),
+                                    child: Text(
+                                      "${filtered.length} result${filtered.length == 1 ? "" : "s"}",
+                                      key: ValueKey(filtered.length),
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: _muted,
+                                      ),
                                     ),
-
-                                    ),
-
-                                    trailing: selected
-
-                                        ? const Icon(
-
-                                            Icons.check_circle,
-
-                                            color: Colors.white,
-
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  child: filtered.isEmpty
+                                      ? const Center(
+                                          key: ValueKey("empty"),
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 32),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.search_off_rounded,
+                                                  size: 44,
+                                                  color: Color(0xFFCBD5E1),
+                                                ),
+                                                SizedBox(height: 12),
+                                                Text(
+                                                  "No results found",
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _ink,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 6),
+                                                Text(
+                                                  "Try another keyword.",
+                                                  style: TextStyle(
+                                                    color: _muted,
+                                                    fontSize: 13.5,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         )
-
-                                        : null,
-
-                                    onTap: () {
-
-                                    onSelected(item);
-
-                                    Navigator.pop(context);
-
-                                    },
-
+                                      : ListView.builder(
+                                          key: ValueKey("list-${filtered.length}-$search"),
+                                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                                          itemCount: filtered.length,
+                                          itemBuilder: (_, index) {
+                                            final item = filtered[index];
+                                            final selected =
+                                                selectedItem == item.values.first;
+                                            return TweenAnimationBuilder<double>(
+                                              tween: Tween(begin: 0, end: 1),
+                                              duration: Duration(
+                                                milliseconds: 220 + (index.clamp(0, 8) * 28),
+                                              ),
+                                              curve: Curves.easeOutCubic,
+                                              builder: (context, t, child) {
+                                                return Opacity(
+                                                  opacity: t,
+                                                  child: Transform.translate(
+                                                    offset: Offset(0, (1 - t) * 12),
+                                                    child: child,
+                                                  ),
+                                                );
+                                              },
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(bottom: 8),
+                                                child: Material(
+                                                  color: selected ? _chip : _soft,
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  child: InkWell(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    onTap: () {
+                                                      dismissKeyboard();
+                                                      onSelected(item);
+                                                      Navigator.pop(context);
+                                                    },
+                                                    child: AnimatedContainer(
+                                                      duration: const Duration(milliseconds: 180),
+                                                      curve: Curves.easeOutCubic,
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 12,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(16),
+                                                        border: Border.all(
+                                                          color: selected
+                                                              ? _blue.withValues(alpha: 0.35)
+                                                              : Colors.transparent,
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          AnimatedContainer(
+                                                            duration: const Duration(milliseconds: 180),
+                                                            width: 42,
+                                                            height: 42,
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.white,
+                                                              borderRadius: BorderRadius.circular(12),
+                                                            ),
+                                                            child: Icon(
+                                                              icon,
+                                                              color: selected ? _blue : _ink,
+                                                              size: 20,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 12),
+                                                          Expanded(
+                                                            child: Text(
+                                                              label(item),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: const TextStyle(
+                                                                fontWeight: FontWeight.w600,
+                                                                fontSize: 14.5,
+                                                                color: _ink,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          AnimatedSwitcher(
+                                                            duration: const Duration(milliseconds: 180),
+                                                            child: selected
+                                                                ? const Icon(
+                                                                    key: ValueKey("check"),
+                                                                    Icons.check_circle_rounded,
+                                                                    color: _blue,
+                                                                    size: 22,
+                                                                  )
+                                                                : const Icon(
+                                                                    key: ValueKey("chevron"),
+                                                                    Icons.chevron_right_rounded,
+                                                                    color: Color(0xFFCBD5E1),
+                                                                    size: 22,
+                                                                  ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                 ),
-
-                                );
-
-                            },
-
-                            ),
-
+                              ),
+                            ],
+                          ),
                         ),
-
-                        ],
-
+                      ),
                     ),
-
-                    ),
-
                 );
-
                 },
-
             );
-
             },
-
         );
 
+        searchController.dispose();
+        searchFocus.dispose();
+
+        if (!mounted) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+        FocusScope.of(context).unfocus();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FocusManager.instance.primaryFocus?.unfocus();
+          FocusScope.of(context).unfocus();
+        });
+    }
+
+    Widget _sheetActionTile({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: _soft,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: _chip,
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
+                  ),
+                  child: Icon(icon, color: _blue, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          color: _ink,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: _muted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1)),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
         void _showError(String message) {
@@ -1449,27 +1859,82 @@ class _ReportScreenState extends State<ReportScreen> {
                 context: context,
                 useRootNavigator: true,
                 barrierDismissible: false,
+                barrierColor: const Color(0x660F172A),
                 builder: (dialogContext) {
-                    return AlertDialog(
-                        icon: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 60,
-                        ),
-                        title: const Text(
-                            "Report Submitted",
-                        ),
-                        content: const Text(
-                            "Your maintenance report has been submitted successfully.",
-                        ),
-                        actions: [
-                            FilledButton(
+                    return Dialog(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFECFDF5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                color: Color(0xFF059669),
+                                size: 26,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "Report submitted",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Your maintenance report was sent successfully.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: _muted,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: FilledButton(
                                 onPressed: () {
-                                    Navigator.of(dialogContext).pop();
+                                  Navigator.of(dialogContext).pop();
                                 },
-                                child: const Text("OK"),
-                            )
-                        ],
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _ink,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Done",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                 },
             );
@@ -1482,19 +1947,59 @@ class _ReportScreenState extends State<ReportScreen> {
                 context: context,
                 useRootNavigator: true,
                 barrierDismissible: false,
+                barrierColor: const Color(0x660F172A),
                 builder: (dialogContext) {
-                    return AlertDialog(
-                        icon: const Icon(
-                            Icons.error,
-                            color: Colors.red,
-                            size: 60,
-                        ),
-                        title: const Text(
-                            "Submission Failed",
-                        ),
-                        content: Text(message),
-                        actions: [
-                            FilledButton(
+                    return Dialog(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFEF2F2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.error_outline_rounded,
+                                color: Color(0xFFDC2626),
+                                size: 26,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "Submission failed",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              message,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: _muted,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: FilledButton(
                                 onPressed: () {
                                     Navigator.of(dialogContext).pop();
 
@@ -1517,9 +2022,26 @@ class _ReportScreenState extends State<ReportScreen> {
                                         },
                                     );
                                 },
-                                child: const Text("OK"),
-                            )
-                        ],
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _ink,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "OK",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                 },
             );
@@ -1572,7 +2094,7 @@ class _ReportScreenState extends State<ReportScreen> {
         fontSize: 13,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.1,
-        color: Color(0xFF6B7280),
+        color: _ink,
       ),
     );
   }
@@ -1586,14 +2108,8 @@ class _ReportScreenState extends State<ReportScreen> {
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
       ),
       child: child,
     );
@@ -1605,7 +2121,7 @@ class _ReportScreenState extends State<ReportScreen> {
       child: Divider(
         height: 1,
         thickness: 1,
-        color: Color(0xFFF3F4F6),
+        color: Color(0xFFF1F5F9),
       ),
     );
   }
@@ -1619,51 +2135,87 @@ class _ReportScreenState extends State<ReportScreen> {
     required VoidCallback onTap,
   }) {
     final hasValue = value != null && value.trim().isNotEmpty;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: iconColor, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _chip,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasValue ? "Selected" : "Tap to choose",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _muted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hasValue ? value : placeholder,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight:
+                                hasValue ? FontWeight.w700 : FontWeight.w500,
+                            color: hasValue ? _ink : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: _soft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: _muted,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 52),
                   child: Text(
-                    hasValue ? value : placeholder,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
-                      color: hasValue
-                          ? const Color(0xFF111827)
-                          : const Color(0xFF9CA3AF),
+                    errorText,
+                    style: const TextStyle(
+                      color: Color(0xFFEF4444),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFD1D5DB),
-                ),
               ],
-            ),
-            if (errorText != null) ...[
-              const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.only(left: 36),
-                child: Text(
-                  errorText,
-                  style: const TextStyle(
-                    color: Color(0xFFEF4444),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1678,12 +2230,20 @@ class _ReportScreenState extends State<ReportScreen> {
     required ValueChanged<String> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 4, 14, 4),
+      padding: const EdgeInsets.fromLTRB(14, 8, 12, 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 14),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _chip,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: controller,
@@ -1691,13 +2251,13 @@ class _ReportScreenState extends State<ReportScreen> {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+                color: _ink,
               ),
               decoration: InputDecoration(
                 hintText: hint,
                 errorText: errorText,
                 hintStyle: const TextStyle(
-                  color: Color(0xFF9CA3AF),
+                  color: Color(0xFF94A3B8),
                   fontWeight: FontWeight.w400,
                   fontSize: 15,
                 ),
@@ -1712,7 +2272,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
@@ -1730,21 +2290,19 @@ class _ReportScreenState extends State<ReportScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF111827) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: selected ? 0.08 : 0.03),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: selected ? _chip : _soft,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? _blue.withValues(alpha: 0.35)
+                : Colors.transparent,
+          ),
         ),
         child: Row(
           children: [
@@ -1752,9 +2310,7 @@ class _ReportScreenState extends State<ReportScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: selected
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : const Color(0xFFF3F4F6),
+                color: selected ? Colors.white : Colors.white,
                 borderRadius: BorderRadius.circular(14),
               ),
               alignment: Alignment.center,
@@ -1762,7 +2318,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   Icon(
                     Icons.build_circle_outlined,
                     size: 22,
-                    color: selected ? Colors.white : const Color(0xFF111827),
+                    color: selected ? _blue : _ink,
                   ),
             ),
             const SizedBox(width: 12),
@@ -1772,20 +2328,18 @@ class _ReportScreenState extends State<ReportScreen> {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: selected ? Colors.white : const Color(0xFF111827),
+                      color: _ink,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: selected
-                          ? Colors.white.withValues(alpha: 0.65)
-                          : const Color(0xFF9CA3AF),
+                      color: _muted,
                     ),
                   ),
                 ],
@@ -1795,9 +2349,7 @@ class _ReportScreenState extends State<ReportScreen> {
               selected
                   ? Icons.check_circle_rounded
                   : Icons.chevron_right_rounded,
-              color: selected
-                  ? Colors.white
-                  : const Color(0xFFD1D5DB),
+              color: selected ? _blue : const Color(0xFFCBD5E1),
             ),
           ],
         ),
@@ -1806,7 +2358,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _statusDot() {
-    Color color = const Color(0xFFD1D5DB);
+    Color color = const Color(0xFFCBD5E1);
     if (isCheckingReporter) {
       color = const Color(0xFFF59E0B);
     } else if (reporterVerified) {
@@ -1832,7 +2384,7 @@ class _ReportScreenState extends State<ReportScreen> {
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF6B7280),
+          color: _muted,
         ),
       );
     }
@@ -1842,7 +2394,7 @@ class _ReportScreenState extends State<ReportScreen> {
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF111827),
+          color: _ink,
         ),
       );
     }
@@ -1861,7 +2413,7 @@ class _ReportScreenState extends State<ReportScreen> {
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w400,
-        color: Color(0xFF9CA3AF),
+        color: Color(0xFF94A3B8),
       ),
     );
   }
@@ -1886,12 +2438,12 @@ class _ReportScreenState extends State<ReportScreen> {
       contentPadding: contentPadding ??
           const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       labelStyle: const TextStyle(
-        color: Color(0xFF9CA3AF),
+        color: Color(0xFF94A3B8),
         fontWeight: FontWeight.w500,
         fontSize: 13,
       ),
       hintStyle: const TextStyle(
-        color: Color(0xFF9CA3AF),
+        color: Color(0xFF94A3B8),
         fontWeight: FontWeight.w400,
         fontSize: 14,
       ),
@@ -1900,8 +2452,8 @@ class _ReportScreenState extends State<ReportScreen> {
         fontSize: 12,
         fontWeight: FontWeight.w500,
       ),
-      prefixIconColor: const Color(0xFF9CA3AF),
-      suffixIconColor: const Color(0xFF9CA3AF),
+      prefixIconColor: _muted,
+      suffixIconColor: _muted,
       border: InputBorder.none,
       enabledBorder: InputBorder.none,
       focusedBorder: InputBorder.none,
@@ -1915,7 +2467,7 @@ class _ReportScreenState extends State<ReportScreen> {
     required bool selected,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(16),
       onTap: () {
         setState(() {
           priority = option.value;
@@ -1925,15 +2477,13 @@ class _ReportScreenState extends State<ReportScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF111827) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: selected ? 0.08 : 0.03),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: selected ? _chip : _soft,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? _blue.withValues(alpha: 0.35)
+                : Colors.transparent,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1942,25 +2492,23 @@ class _ReportScreenState extends State<ReportScreen> {
               selected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
-              color: selected ? Colors.white : const Color(0xFF111827),
+              color: selected ? _blue : _ink,
               size: 20,
             ),
             const SizedBox(height: 12),
             Text(
               option.label,
-              style: TextStyle(
+              style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
-                color: selected ? Colors.white : const Color(0xFF111827),
+                color: _ink,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               option.description,
-              style: TextStyle(
-                color: selected
-                    ? Colors.white.withValues(alpha: 0.65)
-                    : const Color(0xFF9CA3AF),
+              style: const TextStyle(
+                color: _muted,
                 fontSize: 12,
                 height: 1.3,
               ),

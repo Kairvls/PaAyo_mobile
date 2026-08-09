@@ -15,7 +15,7 @@ class EquipmentNotFoundException implements Exception {
 }
 
 class MaintenanceService {
-  static const String baseUrl = "http://192.168.1.7:8000/api";
+  static const String baseUrl = "http://192.168.1.9:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -53,6 +53,79 @@ class MaintenanceService {
     }
 
     throw Exception("Unable to load equipment.");
+  }
+
+  /// GET /maintenance/equipments
+  Future<List<Equipment>> listEquipment({String? search}) async {
+    await _attachToken();
+    final res = await dio.get(
+      "$baseUrl/maintenance/equipments",
+      queryParameters: {
+        if (search != null && search.trim().isNotEmpty) "search": search.trim(),
+      },
+    );
+    final data = res.data;
+
+    if (res.statusCode == 200 && data is Map && data["equipment"] is List) {
+      return (data["equipment"] as List)
+          .whereType<Map>()
+          .map((e) => Equipment.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    return [];
+  }
+
+  /// GET /maintenance/histories
+  Future<List<MaintenanceRecord>> listHistory({int limit = 50}) async {
+    await _attachToken();
+    final res = await dio.get(
+      "$baseUrl/maintenance/histories",
+      queryParameters: {"limit": limit},
+    );
+    final data = res.data;
+
+    if (res.statusCode == 200 && data is Map && data["history"] is List) {
+      return (data["history"] as List)
+          .whereType<Map>()
+          .map((e) => MaintenanceRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    return [];
+  }
+
+  /// GET /maintenance/schedules
+  Future<List<MaintenanceSchedule>> listSchedules({int limit = 50}) async {
+    await _attachToken();
+    final res = await dio.get(
+      "$baseUrl/maintenance/schedules",
+      queryParameters: {"limit": limit},
+    );
+    final data = res.data;
+
+    if (res.statusCode == 200 && data is Map && data["schedules"] is List) {
+      return (data["schedules"] as List)
+          .whereType<Map>()
+          .map((e) =>
+              MaintenanceSchedule.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    return [];
+  }
+
+  /// GET /maintenance/recent
+  Future<MaintenanceRecent> getRecent() async {
+    await _attachToken();
+    final res = await dio.get("$baseUrl/maintenance/recent");
+    final data = res.data;
+
+    if (res.statusCode == 200 && data is Map && data["success"] == true) {
+      return MaintenanceRecent.fromJson(Map<String, dynamic>.from(data));
+    }
+
+    throw Exception("Unable to load recent activity.");
   }
 
   /// GET /maintenance/history/{equipmentId}
@@ -146,6 +219,33 @@ class MaintenanceService {
 
     // 404 (no schedule) or unexpected shape → empty list.
     return [];
+  }
+
+  /// POST /maintenance/schedule
+  Future<Response> createSchedule({
+    required int equipmentId,
+    required String title,
+    String? description,
+    required String frequency,
+    required DateTime nextDate,
+  }) async {
+    await _attachToken();
+
+    String fmt(DateTime d) =>
+        "${d.year.toString().padLeft(4, '0')}-"
+        "${d.month.toString().padLeft(2, '0')}-"
+        "${d.day.toString().padLeft(2, '0')}";
+
+    return await dio.post(
+      "$baseUrl/maintenance/schedule",
+      data: {
+        "equipment_id": equipmentId,
+        "title": title,
+        "description": description,
+        "frequency": frequency,
+        "next_date": fmt(nextDate),
+      },
+    );
   }
 
   /// PUT /maintenance/schedule/{scheduleId}
