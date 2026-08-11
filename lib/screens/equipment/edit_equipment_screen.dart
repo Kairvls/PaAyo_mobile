@@ -13,12 +13,12 @@ class EditEquipmentScreen extends StatefulWidget {
 }
 
 class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
-  static const _ink = Color(0xFF0F172A);
-  static const _muted = Color(0xFF94A3B8);
-  static const _bg = Color(0xFFF4F6F8);
-  static const _blue = Color(0xFF2563EB);
+  static const _ink = Color(0xFF111111);
+  static const _muted = Color(0xFF8A8A8A);
+  static const _page = Color(0xFFF3F3F3);
+  static const _soft = Color(0xFFF7F7F7);
+  static const _border = Color(0xFFE8E8E8);
 
-  // Allowed values enforced by the API validator.
   static const _conditions = [
     "Good",
     "Damaged",
@@ -120,179 +120,134 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _page,
       body: Stack(
         children: [
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.top + 78,
-                ),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.equipment.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: _ink,
-                            letterSpacing: -0.3,
-                            height: 1.15,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Edit details",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.equipment.name,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                                letterSpacing: -0.5,
+                                height: 1.15,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.equipment.qrId,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            _field("Asset Tag", _assetTag, "e.g. AC-2024-014"),
+                            _field("Brand", _brand, "e.g. Panasonic"),
+                            _field("Model", _model, "e.g. CS-XN12"),
+                            _field("Serial Number", _serial, "e.g. SN-88213-KX"),
+                            _field(
+                              "Current Location",
+                              _location,
+                              "Optional room or area",
+                            ),
+                            const SizedBox(height: 6),
+                            _sectionLabel("Condition"),
+                            const SizedBox(height: 12),
+                            _pillChoices(
+                              _conditions,
+                              _condition,
+                              (v) => setState(() => _condition = v),
+                            ),
+                            const SizedBox(height: 22),
+                            _sectionLabel("Inventory Status"),
+                            const SizedBox(height: 12),
+                            _pillChoices(
+                              _inventoryStatuses,
+                              _inventoryStatus,
+                              (v) => setState(() => _inventoryStatus = v),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.equipment.qrId,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: _muted,
-                          ),
-                        ),
-                        const SizedBox(height: 26),
-                        _field("Asset Tag", _assetTag, "e.g. AC-2024-014"),
-                        _field("Brand", _brand, "e.g. Panasonic"),
-                        _field("Model", _model, "e.g. CS-XN12"),
-                        _field("Serial Number", _serial, "e.g. SN-88213-KX"),
-                        _field(
-                          "Current Location",
-                          _location,
-                          "Optional room or area",
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel("Condition"),
-                        const SizedBox(height: 12),
-                        _pillChoices(
-                          _conditions,
-                          _condition,
-                          (v) => setState(() => _condition = v),
-                        ),
-                        const SizedBox(height: 22),
-                        _sectionLabel("Inventory Status"),
-                        const SizedBox(height: 12),
-                        _pillChoices(
-                          _inventoryStatuses,
-                          _inventoryStatus,
-                          (v) => setState(() => _inventoryStatus = v),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      _YellowSaveBar(
+                        label: "Save Changes",
+                        saving: _saving,
+                        onPressed: _save,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, top + 8, 20, 0),
+              child: Row(
+                children: [
+                  _CircleButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.pop(context),
                   ),
-                ],
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                  child: Row(
-                    children: [
-                      _RoundIconButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        onTap: () => Navigator.pop(context),
+                  const Expanded(
+                    child: Text(
+                      "Edit Details",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                        letterSpacing: -0.2,
                       ),
-                      const Spacer(),
-                      const Text(
-                        "Edit Information",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const Spacer(),
-                      const SizedBox(width: 42),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _blue,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            _blue.withValues(alpha: 0.55),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.4,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Text(
-                              "Save Changes",
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 44),
+                ],
               ),
             ),
           ),
@@ -312,9 +267,9 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: _border, width: 1),
             ),
             child: TextField(
               controller: c,
@@ -364,13 +319,8 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: selected == option ? _blue : const Color(0xFFF8FAFC),
+                color: selected == option ? _ink : _soft,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: selected == option
-                      ? _blue
-                      : const Color(0xFFE2E8F0),
-                ),
               ),
               child: Text(
                 option,
@@ -387,25 +337,77 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
   }
 }
 
-class _RoundIconButton extends StatelessWidget {
+class _CircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _RoundIconButton({required this.icon, required this.onTap});
+  const _CircleButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF1F5F9),
+      color: Colors.white,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 20, color: const Color(0xFF111111)),
         ),
+      ),
+    );
+  }
+}
+
+class _YellowSaveBar extends StatelessWidget {
+  final String label;
+  final bool saving;
+  final VoidCallback onPressed;
+
+  const _YellowSaveBar({
+    required this.label,
+    required this.saving,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton(
+        onPressed: saving ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFFFBBF24),
+          foregroundColor: const Color(0xFF111111),
+          disabledBackgroundColor:
+              const Color(0xFFFBBF24).withValues(alpha: 0.55),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: saving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Color(0xFF111111),
+                  ),
+                ),
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                ),
+              ),
       ),
     );
   }

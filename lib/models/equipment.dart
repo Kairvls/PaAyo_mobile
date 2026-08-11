@@ -179,6 +179,45 @@ class MaintenanceSchedule {
     return status;
   }
 
+  /// Human relative countdown, e.g. "2 days left" / "1 week past".
+  String get relativeDueLabel {
+    if (nextDate == null) return urgencyLabel;
+
+    final due = DateTime(nextDate!.year, nextDate!.month, nextDate!.day);
+    final days = due.difference(_today).inDays;
+
+    if (days == 0) return "Due today";
+
+    if (days > 0) {
+      if (days == 1) return "1 day left";
+      if (days < 7) return "$days days left";
+      final weeks = (days / 7).floor();
+      if (days < 30) {
+        return weeks == 1 ? "1 week left" : "$weeks weeks left";
+      }
+      final months = (days / 30).floor();
+      if (months < 12) {
+        return months == 1 ? "1 month left" : "$months months left";
+      }
+      final years = (days / 365).floor();
+      return years == 1 ? "1 year left" : "$years years left";
+    }
+
+    final past = -days;
+    if (past == 1) return "1 day past";
+    if (past < 7) return "$past days past";
+    final weeks = (past / 7).floor();
+    if (past < 30) {
+      return weeks == 1 ? "1 week past" : "$weeks weeks past";
+    }
+    final months = (past / 30).floor();
+    if (months < 12) {
+      return months == 1 ? "1 month past" : "$months months past";
+    }
+    final years = (past / 365).floor();
+    return years == 1 ? "1 year past" : "$years years past";
+  }
+
   factory MaintenanceSchedule.fromJson(Map<String, dynamic> json) {
     String? sn(dynamic v) {
       final value = v?.toString().trim();

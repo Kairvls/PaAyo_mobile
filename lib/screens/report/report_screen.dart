@@ -30,11 +30,13 @@ class PriorityOption {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-    static const _ink = Color(0xFF0F172A);
-    static const _muted = Color(0xFF64748B);
-    static const _soft = Color(0xFFF3F4F6);
-    static const _blue = Color(0xFF2563EB);
-    static const _chip = Color(0xFFEAF1FF);
+    static const _ink = Color(0xFF111111);
+    static const _muted = Color(0xFF8A8A8A);
+    static const _soft = Color(0xFFF2F2F2);
+    static const _blue = Color(0xFF111111);
+    static const _navy = Color(0xFFFBBF24);
+    static const _chip = Color(0xFFF2F2F2);
+    static const _page = Color(0xFFF5F5F5);
 
     String issueSearch = "";
     Timer? _issueSearchTimer;
@@ -156,14 +158,36 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _page,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: _page,
         foregroundColor: _ink,
         surfaceTintColor: Colors.transparent,
-        titleSpacing: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: Material(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+              shadowColor: Colors.black12,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => Navigator.maybePop(context),
+                child: const SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Icon(Icons.arrow_back_rounded, size: 20, color: _ink),
+                ),
+              ),
+            ),
+          ),
+        ),
+        titleSpacing: 8,
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -171,8 +195,8 @@ class _ReportScreenState extends State<ReportScreen> {
               "Report an issue",
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 20,
-                letterSpacing: -0.5,
+                fontSize: 22,
+                letterSpacing: -0.6,
                 color: _ink,
               ),
             ),
@@ -190,7 +214,7 @@ class _ReportScreenState extends State<ReportScreen> {
       ),
       body: SingleChildScrollView(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -548,24 +572,38 @@ class _ReportScreenState extends State<ReportScreen> {
                   GestureDetector(
                     onTap: pickImage,
                     child: Container(
-                      height: 148,
+                      height: 156,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE8EEF5)),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
                       child: selectedImage == null
-                          ? const Column(
+                          ? Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.add_photo_alternate_outlined,
-                                  size: 32,
-                                  color: _blue,
+                                Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    color: _soft,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.add_a_photo_outlined,
+                                    size: 22,
+                                    color: _ink,
+                                  ),
                                 ),
-                                SizedBox(height: 10),
-                                Text(
+                                const SizedBox(height: 12),
+                                const Text(
                                   "Add a photo",
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
@@ -573,8 +611,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                     color: _ink,
                                   ),
                                 ),
-                                SizedBox(height: 4),
-                                Text(
+                                const SizedBox(height: 4),
+                                const Text(
                                   "PNG · JPG · JPEG",
                                   style: TextStyle(
                                     color: _muted,
@@ -585,7 +623,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               ],
                             )
                           : ClipRRect(
-                              borderRadius: BorderRadius.circular(19),
+                              borderRadius: BorderRadius.circular(24),
                               child: Image.file(
                                 selectedImage!,
                                 fit: BoxFit.cover,
@@ -596,21 +634,21 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ===========================
                   // SUBMIT
                   // ===========================
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
+                    height: 56,
                     child: FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: _blue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: _navy,
+                        foregroundColor: _ink,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(28),
                         ),
                       ),
                       onPressed: () async {
@@ -786,6 +824,8 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     Future<void> pickImage() async {
+        FocusManager.instance.primaryFocus?.unfocus();
+        FocusScope.of(context).unfocus();
 
         final picker = ImagePicker();
 
@@ -854,6 +894,15 @@ class _ReportScreenState extends State<ReportScreen> {
             },
         );
 
+        if (!mounted) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+        FocusScope.of(context).unfocus();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FocusManager.instance.primaryFocus?.unfocus();
+          FocusScope.of(context).unfocus();
+        });
+
         if (source == null) return;
 
         final image = await picker.pickImage(
@@ -862,6 +911,15 @@ class _ReportScreenState extends State<ReportScreen> {
             maxWidth: 1280,
             maxHeight: 1280,
         );
+
+        if (!mounted) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+        FocusScope.of(context).unfocus();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FocusManager.instance.primaryFocus?.unfocus();
+          FocusScope.of(context).unfocus();
+        });
 
         if (image == null) return;
 
@@ -1131,8 +1189,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               child: FilledButton(
                                 onPressed: sendReport,
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: _blue,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: _navy,
+                                  foregroundColor: _ink,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
@@ -1219,8 +1277,8 @@ class _ReportScreenState extends State<ReportScreen> {
                             child: FilledButton(
                               onPressed: sendReport,
                               style: FilledButton.styleFrom(
-                                backgroundColor: _blue,
-                                foregroundColor: Colors.white,
+                                backgroundColor: _navy,
+                                foregroundColor: _ink,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
@@ -2091,9 +2149,9 @@ class _ReportScreenState extends State<ReportScreen> {
     return Text(
       title,
       style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.1,
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
         color: _ink,
       ),
     );
@@ -2108,8 +2166,14 @@ class _ReportScreenState extends State<ReportScreen> {
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE8EEF5)),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );
@@ -2121,7 +2185,7 @@ class _ReportScreenState extends State<ReportScreen> {
       child: Divider(
         height: 1,
         thickness: 1,
-        color: Color(0xFFF1F5F9),
+        color: Color(0xFFF0F0F0),
       ),
     );
   }
@@ -2142,22 +2206,22 @@ class _ReportScreenState extends State<ReportScreen> {
           FocusManager.instance.primaryFocus?.unfocus();
           onTap();
         },
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      color: _chip,
-                      borderRadius: BorderRadius.circular(12),
+                      color: _soft,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(icon, color: iconColor, size: 20),
+                    child: Icon(icon, color: _ink, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2179,18 +2243,18 @@ class _ReportScreenState extends State<ReportScreen> {
                             fontSize: 15,
                             fontWeight:
                                 hasValue ? FontWeight.w700 : FontWeight.w500,
-                            color: hasValue ? _ink : const Color(0xFF94A3B8),
+                            color: hasValue ? _ink : const Color(0xFFB0B0B0),
                           ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    width: 28,
-                    height: 28,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: _soft,
-                      borderRadius: BorderRadius.circular(8),
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.keyboard_arrow_down_rounded,
@@ -2203,7 +2267,7 @@ class _ReportScreenState extends State<ReportScreen> {
               if (errorText != null) ...[
                 const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.only(left: 52),
+                  padding: const EdgeInsets.only(left: 56),
                   child: Text(
                     errorText,
                     style: const TextStyle(
@@ -2230,18 +2294,18 @@ class _ReportScreenState extends State<ReportScreen> {
     required ValueChanged<String> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: _chip,
-              borderRadius: BorderRadius.circular(12),
+              color: _soft,
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: iconColor, size: 20),
+            child: Icon(icon, color: _ink, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2257,7 +2321,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 hintText: hint,
                 errorText: errorText,
                 hintStyle: const TextStyle(
-                  color: Color(0xFF94A3B8),
+                  color: Color(0xFFB0B0B0),
                   fontWeight: FontWeight.w400,
                   fontSize: 15,
                 ),
@@ -2290,19 +2354,21 @@ class _ReportScreenState extends State<ReportScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? _chip : _soft,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected
-                ? _blue.withValues(alpha: 0.35)
-                : Colors.transparent,
-          ),
+          color: selected ? _ink : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? 0.12 : 0.04),
+              blurRadius: selected ? 16 : 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -2310,7 +2376,7 @@ class _ReportScreenState extends State<ReportScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: selected ? Colors.white : Colors.white,
+                color: selected ? Colors.white.withValues(alpha: 0.12) : _soft,
                 borderRadius: BorderRadius.circular(14),
               ),
               alignment: Alignment.center,
@@ -2318,7 +2384,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   Icon(
                     Icons.build_circle_outlined,
                     size: 22,
-                    color: selected ? _blue : _ink,
+                    color: selected ? Colors.white : _ink,
                   ),
             ),
             const SizedBox(width: 12),
@@ -2328,18 +2394,20 @@ class _ReportScreenState extends State<ReportScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: _ink,
+                      color: selected ? Colors.white : _ink,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: _muted,
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.65)
+                          : _muted,
                     ),
                   ),
                 ],
@@ -2349,7 +2417,9 @@ class _ReportScreenState extends State<ReportScreen> {
               selected
                   ? Icons.check_circle_rounded
                   : Icons.chevron_right_rounded,
-              color: selected ? _blue : const Color(0xFFCBD5E1),
+              color: selected
+                  ? Colors.white
+                  : const Color(0xFFCFCFCF),
             ),
           ],
         ),
@@ -2467,7 +2537,7 @@ class _ReportScreenState extends State<ReportScreen> {
     required bool selected,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       onTap: () {
         setState(() {
           priority = option.value;
@@ -2477,13 +2547,15 @@ class _ReportScreenState extends State<ReportScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? _chip : _soft,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected
-                ? _blue.withValues(alpha: 0.35)
-                : Colors.transparent,
-          ),
+          color: selected ? _ink : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? 0.12 : 0.04),
+              blurRadius: selected ? 16 : 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2492,23 +2564,25 @@ class _ReportScreenState extends State<ReportScreen> {
               selected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
-              color: selected ? _blue : _ink,
+              color: selected ? Colors.white : _ink,
               size: 20,
             ),
             const SizedBox(height: 12),
             Text(
               option.label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
-                color: _ink,
+                color: selected ? Colors.white : _ink,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               option.description,
-              style: const TextStyle(
-                color: _muted,
+              style: TextStyle(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.65)
+                    : _muted,
                 fontSize: 12,
                 height: 1.3,
               ),

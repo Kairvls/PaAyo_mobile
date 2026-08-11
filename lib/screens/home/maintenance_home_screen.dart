@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +8,6 @@ import '../../services/maintenance_service.dart';
 import '../../utils/equipment_icon.dart';
 import '../equipment/equipment_screen.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
 import '../schedule/schedule_alerts_screen.dart';
 import '../schedule/schedule_screen.dart';
 
@@ -33,14 +30,16 @@ class MaintenanceHomeScreen extends StatefulWidget {
 class _MaintenanceTool {
   final String title;
   final String subtitle;
+  final String meta;
   final String route;
-  final IconData icon;
+  final String imageAsset;
 
   const _MaintenanceTool({
     required this.title,
     required this.subtitle,
+    required this.meta,
     required this.route,
-    required this.icon,
+    required this.imageAsset,
   });
 }
 
@@ -49,20 +48,23 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
   static const _muted = Color(0xFF64748B);
   static const _blue = Color(0xFF2563EB);
   static const _navy = Color(0xFF0B2F64);
-  static const _bg = Colors.white;
+  static const _bg = Color(0xFFF5F5F5);
+  static const _accent = Color(0xFF0B2F64);
 
   static const _tools = [
     _MaintenanceTool(
       title: "Record Fix",
       subtitle: "Log a repair",
+      meta: "On-site",
       route: "/maintenance",
-      icon: Icons.build_rounded,
+      imageAsset: "assets/images/record_fix.png",
     ),
     _MaintenanceTool(
       title: "History",
       subtitle: "Timeline log",
+      meta: "Past fixes",
       route: "/history",
-      icon: Icons.history_rounded,
+      imageAsset: "assets/images/history.png",
     ),
   ];
 
@@ -250,16 +252,190 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
     }
   }
 
-  Future<void> _promptScan(
-    String? equipmentName, {
+  /// Preview full (non-truncated) card info first; scan stays optional CTA.
+  Future<void> _showCardPreview({
+    required String title,
+    required List<({String label, String value})> details,
+    required Color accent,
+    required IconData icon,
+    String? badge,
     ScanDestination destination = ScanDestination.profile,
   }) {
-    return _pushAndKeepSearchClosed(
-      promptScanToManage(
-        context,
-        equipmentName: equipmentName,
-        destination: destination,
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(icon, color: accent, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          badge!,
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kCardGray,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < details.length; i++) ...[
+                        if (i > 0)
+                          const Divider(height: 1, color: Color(0xFFE8EEF5)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 96,
+                                child: Text(
+                                  details[i].label,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _muted,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  details[i].value,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ink,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  "To update or manage this unit, scan its QR code on-site.",
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: _muted,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _pushAndKeepSearchClosed(
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                QRScannerScreen(destination: destination),
+                          ),
+                        ),
+                      );
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text(
+                      "Open scanner",
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Close"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -328,44 +504,47 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                 sliver: SliverToBoxAdapter(child: _buildWelcomeCard()),
               ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                sliver: SliverToBoxAdapter(child: _buildRecentSection()),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
-                sliver: const SliverToBoxAdapter(
-                  child: Text(
+                sliver: SliverToBoxAdapter(
+                  child: const Text(
                     "Quick Actions",
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: _navy,
+                      color: _ink,
+                      letterSpacing: -0.3,
                     ),
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 38),
-                sliver: SliverGrid(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 1.2,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => _ToolCard(
-                      tool: _tools[i],
-                      onTap: () => _onToolTap(_tools[i]),
-                    ),
-                    childCount: _tools.length,
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+                  child: Row(
+                    children: [
+                      for (int i = 0; i < _tools.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 14),
+                        Expanded(
+                          child: AspectRatio(
+                            aspectRatio: 1.12,
+                            child: _ToolCard(
+                              tool: _tools[i],
+                              onTap: () => _onToolTap(_tools[i]),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 48),
+                sliver: SliverToBoxAdapter(child: _buildRecentSection()),
               ),
             ],
           ),
@@ -423,6 +602,16 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
         }
 
         final dateFmt = DateFormat("MMM d");
+        final overdueById = <int, MaintenanceSchedule>{};
+        for (final s in [
+          ...recent.upcomingSchedules,
+          ...recent.dueSoonSchedules,
+        ]) {
+          if (s.isOverdue) overdueById[s.id] = s;
+        }
+        final overdueList = overdueById.values.toList();
+        final dueSoonList =
+            recent.dueSoonSchedules.where((s) => !s.isOverdue).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,8 +621,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 _StatChip(
                   label: "Equipment",
                   value: "${recent.equipmentCount}",
-                  color: const Color(0xFF7C3AED),
-                  backgroundImage: "assets/images/equipment.jpg",
                   onTap: () => _pushAndKeepSearchClosed(
                     Navigator.pushNamed(context, "/equipment"),
                   ),
@@ -442,8 +629,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 _StatChip(
                   label: "Due soon",
                   value: "${recent.dueSoonSchedulesCount}",
-                  color: const Color(0xFFF59E0B),
-                  backgroundImage: "assets/images/due_soon.jpg",
                   onTap: () => _pushAndKeepSearchClosed(
                     Navigator.push(
                       context,
@@ -459,8 +644,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 _StatChip(
                   label: "Overdue",
                   value: "${recent.overdueSchedules}",
-                  color: const Color(0xFFEF4444),
-                  backgroundImage: "assets/images/overdue.jpg",
                   onTap: () => _pushAndKeepSearchClosed(
                     Navigator.push(
                       context,
@@ -474,150 +657,307 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 ),
               ],
             ),
-            if (recent.dueSoonSchedules.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Due within ${recent.dueSoonDays} days",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _ink,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => _pushAndKeepSearchClosed(
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ScheduleAlertsScreen(
-                            filter: ScheduleAlertFilter.dueSoon,
-                          ),
-                        ),
+            if (overdueList.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              _SectionHeader(
+                title: "Overdue",
+                onSeeAll: () => _pushAndKeepSearchClosed(
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ScheduleAlertsScreen(
+                        filter: ScheduleAlertFilter.overdue,
                       ),
-                    ),
-                    child: const Text("See all"),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...recent.dueSoonSchedules.take(3).map(
-                (s) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _RecentTile(
-                    icon: Icons.schedule_rounded,
-                    color: const Color(0xFFF59E0B),
-                    title: s.title,
-                    subtitle: [
-                      s.equipmentName ?? "Equipment",
-                      if (s.room != null && s.room!.trim().isNotEmpty &&
-                          s.room != "—")
-                        s.room!,
-                      if (s.nextDate != null) dateFmt.format(s.nextDate!),
-                      "Due soon",
-                    ].join(" · "),
-                    onTap: () => _promptScan(
-                      s.equipmentName,
-                      destination: ScanDestination.schedule,
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              _QuietListCard(
+                children: [
+                  for (final s in overdueList.take(3))
+                    _QuietListRow(
+                      leading: Image.asset(
+                        "assets/images/overdue_date.png",
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.hourglass_bottom_rounded,
+                          color: Color(0xFFEF4444),
+                          size: 28,
+                        ),
+                      ),
+                      color: const Color(0xFFEF4444),
+                      title: s.title,
+                      subtitle: [
+                        s.equipmentName ?? "Equipment",
+                        if (s.room != null &&
+                            s.room!.trim().isNotEmpty &&
+                            s.room != "—")
+                          s.room!,
+                      ].join(" · "),
+                      trailing: s.relativeDueLabel,
+                      onTap: () => _showCardPreview(
+                        title: s.title,
+                        accent: const Color(0xFFEF4444),
+                        icon: Icons.hourglass_bottom_rounded,
+                        badge: s.relativeDueLabel,
+                        destination: ScanDestination.schedule,
+                        details: [
+                          (
+                            label: "Equipment",
+                            value: s.equipmentName ?? "Equipment",
+                          ),
+                          if (s.room != null &&
+                              s.room!.trim().isNotEmpty &&
+                              s.room != "—")
+                            (label: "Room", value: s.room!),
+                          if (s.nextDate != null)
+                            (
+                              label: "Next due",
+                              value: dateFmt.format(s.nextDate!),
+                            ),
+                          (label: "Status", value: s.urgencyLabel),
+                          if (s.frequency.trim().isNotEmpty &&
+                              s.frequency != "—")
+                            (label: "Frequency", value: s.frequency),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            if (dueSoonList.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              _SectionHeader(
+                title: "Due within ${recent.dueSoonDays} days",
+                onSeeAll: () => _pushAndKeepSearchClosed(
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ScheduleAlertsScreen(
+                        filter: ScheduleAlertFilter.dueSoon,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _QuietListCard(
+                children: [
+                  for (final s in dueSoonList.take(3))
+                    _QuietListRow(
+                      leading: Image.asset(
+                        "assets/images/due_within.png",
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.schedule_rounded,
+                          color: Color(0xFFF59E0B),
+                          size: 28,
+                        ),
+                      ),
+                      color: const Color(0xFFF59E0B),
+                      title: s.title,
+                      subtitle: [
+                        s.equipmentName ?? "Equipment",
+                        if (s.room != null &&
+                            s.room!.trim().isNotEmpty &&
+                            s.room != "—")
+                          s.room!,
+                      ].join(" · "),
+                      trailing: s.relativeDueLabel,
+                      onTap: () => _showCardPreview(
+                        title: s.title,
+                        accent: const Color(0xFFF59E0B),
+                        icon: Icons.schedule_rounded,
+                        badge: s.relativeDueLabel,
+                        destination: ScanDestination.schedule,
+                        details: [
+                          (
+                            label: "Equipment",
+                            value: s.equipmentName ?? "Equipment",
+                          ),
+                          if (s.room != null &&
+                              s.room!.trim().isNotEmpty &&
+                              s.room != "—")
+                            (label: "Room", value: s.room!),
+                          if (s.nextDate != null)
+                            (
+                              label: "Next due",
+                              value: dateFmt.format(s.nextDate!),
+                            ),
+                          (label: "Status", value: s.urgencyLabel),
+                          if (s.frequency.trim().isNotEmpty &&
+                              s.frequency != "—")
+                            (label: "Frequency", value: s.frequency),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ],
             if (recent.attentionEquipment.isNotEmpty ||
                 recent.recentHistory.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActivitySegment(
-                      index: _activitySegment,
-                      onChanged: (i) => setState(() => _activitySegment = i),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () => _pushAndKeepSearchClosed(
-                      _activitySegment == 0
-                          ? Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const EquipmentScreen(attentionOnly: true),
-                              ),
-                            )
-                          : Navigator.pushNamed(context, "/maintenance"),
-                    ),
-                    child: const Text("See all"),
-                  ),
-                ],
+              const SizedBox(height: 24),
+              _SectionHeader(
+                title: "Activity",
+                onSeeAll: () => _pushAndKeepSearchClosed(
+                  _activitySegment == 0
+                      ? Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const EquipmentScreen(attentionOnly: true),
+                          ),
+                        )
+                      : Navigator.pushNamed(context, "/maintenance"),
+                ),
               ),
-              const SizedBox(height: 10),
-              if (_activitySegment == 0) ...[
-                if (recent.attentionEquipment.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      "Nothing needs attention right now.",
-                      style: TextStyle(color: _muted, fontSize: 13.5),
-                    ),
-                  )
-                else
-                  ...recent.attentionEquipment.take(3).map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _RecentTile(
-                        leading: EquipmentGraphic(
-                          name: e.name,
-                          category: e.category,
-                          size: 26,
-                          fallbackColor: const Color(0xFF2563EB),
+              const SizedBox(height: 12),
+              _ActivityPanel(
+                index: _activitySegment,
+                attentionCount: recent.attentionEquipment.length,
+                fixesCount: recent.recentHistory.length,
+                onChanged: (i) => setState(() => _activitySegment = i),
+                child: () {
+                  if (_activitySegment == 0) {
+                    final items = recent.attentionEquipment.take(3).toList();
+                    if (items.isEmpty) {
+                      return const _ActivityEmpty(
+                        text: "Nothing needs attention right now.",
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (int i = 0; i < items.length; i++) ...[
+                          if (i > 0)
+                            const Divider(
+                              height: 1,
+                              thickness: 1,
+                              indent: 70,
+                              color: Color(0xFFF1F5F9),
+                            ),
+                          _ActivityFeedRow(
+                            leading: const Center(
+                              child: Text(
+                                "!",
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A),
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                            title: items[i].name,
+                            subtitle: items[i].room.trim().isNotEmpty &&
+                                    items[i].room != "—"
+                                ? items[i].room
+                                : (items[i].category.trim().isNotEmpty &&
+                                        items[i].category != "—"
+                                    ? items[i].category
+                                    : "Equipment"),
+                            badge: items[i].status,
+                            badgeTone: _ActivityBadgeTone.alert,
+                            onTap: () => _showCardPreview(
+                              title: items[i].name,
+                              accent: const Color(0xFFEA580C),
+                              icon: Icons.warning_amber_rounded,
+                              details: [
+                                (label: "Room", value: items[i].room),
+                                (label: "Status", value: items[i].status),
+                                if (items[i].category.trim().isNotEmpty &&
+                                    items[i].category != "—")
+                                  (
+                                    label: "Category",
+                                    value: items[i].category,
+                                  ),
+                                if (items[i].condition.trim().isNotEmpty &&
+                                    items[i].condition != "—")
+                                  (
+                                    label: "Condition",
+                                    value: items[i].condition,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  }
+
+                  final items = recent.recentHistory.take(3).toList();
+                  if (items.isEmpty) {
+                    return const _ActivityEmpty(text: "No recent fixes yet.");
+                  }
+                  return Column(
+                    children: [
+                      for (int i = 0; i < items.length; i++) ...[
+                        if (i > 0)
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            indent: 70,
+                            color: Color(0xFFF1F5F9),
+                          ),
+                        _ActivityFeedRow(
+                          leading: const Icon(
+                            Icons.build_rounded,
+                            color: Color(0xFF0F172A),
+                            size: 26,
+                          ),
+                          title: items[i].equipmentName ?? "Equipment",
+                          subtitle: [
+                            if (items[i].room != null &&
+                                items[i].room!.trim().isNotEmpty &&
+                                items[i].room != "—")
+                              items[i].room!,
+                            dateFmt.format(items[i].date.toLocal()),
+                          ].join(" · "),
+                          badge: items[i].status,
+                          badgeTone: _ActivityBadgeTone.ok,
+                          onTap: () => _showCardPreview(
+                            title: items[i].equipmentName ?? "Equipment",
+                            accent: const Color(0xFFEA580C),
+                            icon: Icons.build_rounded,
+                            destination: ScanDestination.history,
+                            details: [
+                              if (items[i].room != null &&
+                                  items[i].room!.trim().isNotEmpty &&
+                                  items[i].room != "—")
+                                (label: "Room", value: items[i].room!),
+                              (label: "Status", value: items[i].status),
+                              (
+                                label: "Date",
+                                value: dateFmt.format(items[i].date.toLocal()),
+                              ),
+                              if (items[i].personnel.trim().isNotEmpty)
+                                (
+                                  label: "Personnel",
+                                  value: items[i].personnel,
+                                ),
+                              if (items[i].findings != null &&
+                                  items[i].findings!.trim().isNotEmpty)
+                                (
+                                  label: "Findings",
+                                  value: items[i].findings!,
+                                ),
+                              if (items[i].repairAction != null &&
+                                  items[i].repairAction!.trim().isNotEmpty)
+                                (
+                                  label: "Repair",
+                                  value: items[i].repairAction!,
+                                ),
+                            ],
+                          ),
                         ),
-                        color: const Color(0xFFEA580C),
-                        title: e.name,
-                        subtitle: "${e.room} · ${e.status}",
-                        onTap: () => _promptScan(e.name),
-                      ),
-                    ),
-                  ),
-              ] else ...[
-                if (recent.recentHistory.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      "No recent fixes yet.",
-                      style: TextStyle(color: _muted, fontSize: 13.5),
-                    ),
-                  )
-                else
-                  ...recent.recentHistory.take(3).map(
-                    (r) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _RecentTile(
-                        icon: Icons.build_rounded,
-                        color: _blue,
-                        iconBg: const Color(0xFFEAF1FF),
-                        title: r.equipmentName ?? "Equipment",
-                        subtitle: [
-                          if (r.room != null &&
-                              r.room!.trim().isNotEmpty &&
-                              r.room != "—")
-                            r.room!,
-                          r.status,
-                          dateFmt.format(r.date.toLocal()),
-                        ].join(" · "),
-                        onTap: () => _promptScan(
-                          r.equipmentName,
-                          destination: ScanDestination.history,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+                      ],
+                    ],
+                  );
+                }(),
+              ),
             ],
-            if (recent.dueSoonSchedules.isEmpty &&
+            if (overdueList.isEmpty &&
+                dueSoonList.isEmpty &&
                 recent.attentionEquipment.isEmpty &&
                 recent.recentHistory.isEmpty) ...[
               const SizedBox(height: 12),
@@ -680,11 +1020,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 icon: Icons.grid_view_rounded,
                 onTap: () {},
               ),
-              Image.asset(
-                "assets/images/paayo_logo_second.png",
-                height: 62,
-                fit: BoxFit.contain,
-              ),
               FutureBuilder<MaintenanceRecent>(
                 future: _recentFuture,
                 builder: (context, snap) {
@@ -742,12 +1077,13 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       height: 52,
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
-        color: kCardGray,
-        borderRadius: BorderRadius.circular(30),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFEEF0F4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _muted, size: 22),
+          const Icon(Icons.search_rounded, color: _ink, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -760,11 +1096,20 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 if (value.trim().isEmpty) return;
                 _openEquipmentSearch(value);
               },
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: const InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
-                hintText: "Search...",
-                hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                hintText: "Search equipment...",
+                hintStyle: TextStyle(
+                  color: _muted,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -772,7 +1117,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
             width: 1,
             height: 22,
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            color: const Color(0xFFCBD5E1),
+            color: const Color(0xFFEEF0F4),
           ),
           IconButton(
             tooltip: "Search",
@@ -781,7 +1126,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
               if (q.isEmpty) return;
               _openEquipmentSearch(q);
             },
-            icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+            icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -799,22 +1144,23 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       ),
       child: Stack(
         children: [
-          // Full image sits behind, on the right, slightly overlapping toward
-          // the center; the text column below is painted on top of it.
+          // Image behind — free to fill top↔bottom and spill left without
+          // affecting text layout.
           Positioned(
-            right: 0,
+            right: -8,
             top: 0,
             bottom: 0,
-            width: 150,
+            width: 190,
             child: Image.asset(
               "assets/images/maintenance_home_card_image.png",
-              fit: BoxFit.contain,
+              fit: BoxFit.fitHeight,
               alignment: Alignment.centerRight,
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           ),
+          // Text + CTA on top layer
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 96, 18),
+            padding: const EdgeInsets.fromLTRB(20, 18, 110, 18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -848,8 +1194,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: _blue,
-                      borderRadius: BorderRadius.circular(30),
+                      color: _accent,
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Text(
                       "Start scanning",
@@ -982,53 +1328,280 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
   }
 }
 
-class _ActivitySegment extends StatelessWidget {
-  final int index;
-  final ValueChanged<int> onChanged;
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final VoidCallback onSeeAll;
 
-  const _ActivitySegment({
+  const _SectionHeader({
+    required this.title,
+    required this.onSeeAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: onSeeAll,
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF2563EB),
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            "See all",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuietListCard extends StatelessWidget {
+  final List<Widget> children;
+
+  const _QuietListCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        for (int i = 0; i < children.length; i++) ...[
+          children[i],
+          if (i != children.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _QuietListRow extends StatelessWidget {
+  final IconData? icon;
+  final Widget? leading;
+  final Color color;
+  final Color? iconBg;
+  final String title;
+  final String subtitle;
+  final String? trailing;
+  final VoidCallback onTap;
+  final bool compact;
+
+  const _QuietListRow({
+    this.icon,
+    this.leading,
+    required this.color,
+    this.iconBg,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final leadSize = 50.0;
+    final pad = compact
+        ? const EdgeInsets.fromLTRB(12, 8, 8, 8)
+        : const EdgeInsets.fromLTRB(14, 12, 10, 12);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(compact ? 16 : 20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(compact ? 16 : 20),
+        child: Container(
+          padding: pad,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(compact ? 16 : 20),
+            border: Border.all(color: const Color(0xFFEEF0F4)),
+          ),
+          child: Row(
+            children: [
+              if (leading != null)
+                SizedBox(
+                  width: leadSize,
+                  height: leadSize,
+                  child: leading,
+                )
+              else
+                Container(
+                  width: leadSize,
+                  height: leadSize,
+                  decoration: BoxDecoration(
+                    color: iconBg ?? color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+              SizedBox(width: compact ? 12 : 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: compact ? 14.5 : 15,
+                        color: const Color(0xFF0F172A),
+                        height: 1.15,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      SizedBox(height: compact ? 2 : 4),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: compact ? 12.5 : 13,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    if (trailing != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.schedule_rounded,
+                              size: 11,
+                              color: color,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              trailing!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF94A3B8),
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _ActivityBadgeTone { alert, ok }
+
+class _ActivityPanel extends StatelessWidget {
+  final int index;
+  final int attentionCount;
+  final int fixesCount;
+  final ValueChanged<int> onChanged;
+  final Widget child;
+
+  const _ActivityPanel({
     required this.index,
+    required this.attentionCount,
+    required this.fixesCount,
     required this.onChanged,
+    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40,
-      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: kCardGray,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFEEF0F4)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _SegmentPill(
-              label: "Needs attention",
-              selected: index == 0,
-              onTap: () => onChanged(0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ActivityTab(
+                    label: "Needs attention",
+                    count: attentionCount,
+                    selected: index == 0,
+                    onTap: () => onChanged(0),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _ActivityTab(
+                    label: "Recent fixes",
+                    count: fixesCount,
+                    selected: index == 1,
+                    onTap: () => onChanged(1),
+                  ),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: _SegmentPill(
-              label: "Recent fixes",
-              selected: index == 1,
-              onTap: () => onChanged(1),
-            ),
-          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+          child,
         ],
       ),
     );
   }
 }
 
-class _SegmentPill extends StatelessWidget {
+class _ActivityTab extends StatelessWidget {
   final String label;
+  final int count;
   final bool selected;
   final VoidCallback onTap;
 
-  const _SegmentPill({
+  const _ActivityTab({
     required this.label,
+    required this.count,
     required this.selected,
     required this.onTap,
   });
@@ -1036,24 +1609,173 @@ class _SegmentPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? Colors.white : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      color: selected ? const Color(0xFFF5F5F5) : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Center(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              color: selected
-                  ? const Color(0xFF0F172A)
-                  : const Color(0xFF64748B),
-            ),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                constraints: const BoxConstraints(minWidth: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFE8EAED),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  "$count",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? Colors.white : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityFeedRow extends StatelessWidget {
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final _ActivityBadgeTone badgeTone;
+  final VoidCallback onTap;
+
+  const _ActivityFeedRow({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.badgeTone,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isAlert = badgeTone == _ActivityBadgeTone.alert;
+    final badgeBg =
+        isAlert ? const Color(0xFFFFF1E8) : const Color(0xFFEEF6FF);
+    final badgeFg =
+        isAlert ? const Color(0xFFEA580C) : const Color(0xFF2563EB);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 28,
+                child: Center(child: leading),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 92),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: badgeFg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityEmpty extends StatelessWidget {
+  final String text;
+
+  const _ActivityEmpty({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Color(0xFF64748B),
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -1063,164 +1785,57 @@ class _SegmentPill extends StatelessWidget {
 class _StatChip extends StatelessWidget {
   final String label;
   final String value;
-  final Color color;
-  final String? backgroundImage;
   final VoidCallback onTap;
 
   const _StatChip({
     required this.label,
     required this.value,
-    required this.color,
-    this.backgroundImage,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
+      child: Material(
+        color: const Color(0xFFEEEEEE),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: kSoftShadowSm,
-        ),
-        child: Material(
-          color: backgroundImage == null ? kCardGray : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(18),
-            child: Stack(
-              fit: StackFit.passthrough,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 16,
+            ),
+            child: Column(
               children: [
-                if (backgroundImage != null)
-                  Positioned.fill(
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                      child: Image.asset(
-                        backgroundImage!,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    height: 1,
                   ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 16,
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        value,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                          height: 1,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
-                    ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
                   ),
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _RecentTile extends StatelessWidget {
-  final IconData? icon;
-  final Widget? leading;
-  final Color color;
-  final Color? iconBg;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _RecentTile({
-    this.icon,
-    this.leading,
-    required this.color,
-    this.iconBg,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: kSoftShadowSm,
-      ),
-      child: Material(
-      color: kCardGray,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                padding: leading != null ? const EdgeInsets.all(7) : null,
-                decoration: BoxDecoration(
-                  color: leading != null
-                      ? Colors.white
-                      : (iconBg ?? color.withValues(alpha: 0.12)),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: leading ?? Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
-            ],
-          ),
-        ),
-      ),
       ),
     );
   }
@@ -1232,65 +1847,86 @@ class _ToolCard extends StatelessWidget {
 
   const _ToolCard({required this.tool, required this.onTap});
 
-  static const _navy = Color(0xFF0B2F64);
-  static const _iconBlue = Color(0xFF2563EB);
+  static const _ink = Color(0xFF0F172A);
+  static const _muted = Color(0xFF64748B);
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A0B2F64),
-            blurRadius: 18,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          splashColor: _navy.withValues(alpha: 0.08),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            // Soft edge so white cards still read on white page
+            Positioned.fill(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF1FF),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFEEF0F4)),
                 ),
-                child: Icon(tool.icon, color: _iconBlue, size: 24),
-                ),
-                const Spacer(),
-                Text(
-                  tool.title,
-                  style: const TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w800,
-                    color: _navy,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tool.subtitle,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            // Text — top/left + bottom meta
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tool.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                      height: 1.15,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tool.subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                      height: 1.25,
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 72),
+                    child: Text(
+                      tool.meta,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Bottom-right illustration
+            Positioned(
+              right: -6,
+              bottom: -8,
+              child: IgnorePointer(
+                child: Image.asset(
+                  tool.imageAsset,
+                  width: 94,
+                  height: 94,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1310,14 +1946,11 @@ class _CircleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: kSoftShadowSm,
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(
+        side: BorderSide(color: Color(0xFFEEF0F4)),
       ),
-      child: Material(
-      color: kCardGray,
-      shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
@@ -1344,7 +1977,6 @@ class _CircleIcon extends StatelessWidget {
             ],
           ),
         ),
-      ),
       ),
     );
   }

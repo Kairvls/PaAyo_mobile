@@ -15,10 +15,10 @@ class EquipmentScheduleScreen extends StatefulWidget {
 }
 
 class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
-  static const _ink = Color(0xFF0F172A);
-  static const _muted = Color(0xFF64748B);
-  static const _bg = Color(0xFFF3F4F6);
-  static const _blue = Color(0xFF2563EB);
+  static const _ink = Color(0xFF111111);
+  static const _muted = Color(0xFF8A8A8A);
+  static const _page = Color(0xFFF3F3F3);
+  static const _yellow = Color(0xFFFBBF24);
 
   final MaintenanceService _service = MaintenanceService();
   late Future<List<MaintenanceSchedule>> _future;
@@ -35,10 +35,10 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
 
   Color _statusColor(MaintenanceSchedule schedule) {
     if (schedule.isOverdue) return const Color(0xFFEF4444);
-    if (schedule.isDueSoon) return const Color(0xFFF59E0B);
+    if (schedule.isDueSoon) return _yellow;
     final s = schedule.status.toLowerCase();
-    if (s.contains("completed")) return const Color(0xFF16A34A);
-    return const Color(0xFF2563EB); // Active
+    if (s.contains("completed")) return const Color(0xFF22C55E);
+    return _ink;
   }
 
   Future<void> _edit(MaintenanceSchedule schedule) async {
@@ -70,99 +70,173 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+
     return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        elevation: 0,
-        foregroundColor: _ink,
-        title: const Text(
-          "Maintenance Schedule",
-          style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-        ),
-      ),
+      backgroundColor: _page,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,
-        backgroundColor: _blue,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        backgroundColor: _yellow,
+        foregroundColor: _ink,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        icon: const Icon(Icons.add_rounded),
         label: const Text(
           "Create schedule",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-      body: FutureBuilder<List<MaintenanceSchedule>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final schedules = snapshot.data ?? [];
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-            children: [
-              Text(
-                widget.equipment.name,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: _ink,
-                ),
-              ),
-              Text(
-                "QR ID · ${widget.equipment.qrId}",
-                style: const TextStyle(fontSize: 12.5, color: _muted),
-              ),
-              const SizedBox(height: 20),
-              if (schedules.isEmpty)
-                _buildEmpty()
-              else
-                for (final s in schedules)
-                  _ScheduleCard(
-                    schedule: s,
-                    color: _statusColor(s),
-                    onTap: () => _edit(s),
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
+            child: Row(
+              children: [
+                Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(context),
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(Icons.arrow_back_rounded,
+                          size: 20, color: _ink),
+                    ),
                   ),
-            ],
-          );
-        },
+                ),
+                const Expanded(
+                  child: Text(
+                    "Schedule",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 44),
+              ],
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<MaintenanceSchedule>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: _ink,
+                    ),
+                  );
+                }
+
+                final schedules = snapshot.data ?? [];
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.equipment.name,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: _ink,
+                              letterSpacing: -0.4,
+                              height: 1.15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.equipment.qrId,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: _muted,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          if (schedules.isEmpty)
+                            _buildEmpty()
+                          else
+                            for (final s in schedules)
+                              _ScheduleCard(
+                                schedule: s,
+                                color: _statusColor(s),
+                                onTap: () => _edit(s),
+                              ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEmpty() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
       child: Column(
         children: [
-          const Icon(Icons.event_busy_rounded, size: 40, color: _muted),
+          const Icon(Icons.event_busy_rounded, size: 36, color: _muted),
           const SizedBox(height: 12),
           const Text(
             "No maintenance schedule",
             style: TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               color: _ink,
               fontSize: 15,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           const Text(
             "Create a schedule so this equipment can be inspected on time.",
             textAlign: TextAlign.center,
-            style: TextStyle(color: _muted, fontSize: 13),
+            style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: _create,
-            style: FilledButton.styleFrom(backgroundColor: _blue),
+            style: FilledButton.styleFrom(
+              backgroundColor: _yellow,
+              foregroundColor: _ink,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
             icon: const Icon(Icons.add_rounded),
-            label: const Text("Create schedule"),
+            label: const Text(
+              "Create schedule",
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -184,19 +258,16 @@ class _ScheduleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final next = schedule.nextDate;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.transparent,
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -206,9 +277,9 @@ class _ScheduleCard extends StatelessWidget {
                       child: Text(
                         schedule.title,
                         style: const TextStyle(
-                          fontSize: 15.5,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
+                          color: Color(0xFF111111),
                         ),
                       ),
                     ),
@@ -216,27 +287,30 @@ class _ScheduleCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(30),
+                        color: color.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        schedule.urgencyLabel,
+                        schedule.relativeDueLabel,
                         style: TextStyle(
-                          color: color,
+                          color: color == const Color(0xFFFBBF24)
+                              ? const Color(0xFF92400E)
+                              : color,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (schedule.description != null) ...[
+                if (schedule.description != null &&
+                    schedule.description!.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
                     schedule.description!,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF64748B),
+                      color: Color(0xFF8A8A8A),
                       height: 1.4,
                     ),
                   ),
@@ -245,19 +319,19 @@ class _ScheduleCard extends StatelessWidget {
                 Row(
                   children: [
                     const Icon(Icons.repeat_rounded,
-                        size: 16, color: Color(0xFF94A3B8)),
+                        size: 16, color: Color(0xFF8A8A8A)),
                     const SizedBox(width: 6),
                     Text(
                       schedule.frequency,
                       style: const TextStyle(
                         fontSize: 12.5,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF8A8A8A),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const Spacer(),
                     const Icon(Icons.event_rounded,
-                        size: 16, color: Color(0xFF94A3B8)),
+                        size: 16, color: Color(0xFF8A8A8A)),
                     const SizedBox(width: 6),
                     Text(
                       next == null
@@ -265,7 +339,7 @@ class _ScheduleCard extends StatelessWidget {
                           : DateFormat("MMM d, yyyy").format(next),
                       style: const TextStyle(
                         fontSize: 12.5,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF8A8A8A),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -294,10 +368,12 @@ class _ScheduleFormScreen extends StatefulWidget {
 }
 
 class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
-  static const _ink = Color(0xFF0F172A);
-  static const _muted = Color(0xFF94A3B8);
-  static const _bg = Color(0xFFF4F6F8);
-  static const _blue = Color(0xFF2563EB);
+  static const _ink = Color(0xFF111111);
+  static const _muted = Color(0xFF8A8A8A);
+  static const _page = Color(0xFFF3F3F3);
+  static const _soft = Color(0xFFF7F7F7);
+  static const _yellow = Color(0xFFFBBF24);
+  static const _border = Color(0xFFE8E8E8);
 
   static const _statuses = ["Active", "Completed", "Overdue"];
   static const _frequencies = [
@@ -347,6 +423,115 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
       initialDate: _nextDate ?? now.add(const Duration(days: 30)),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
+      helpText: "Select next date",
+      cancelText: "Cancel",
+      confirmText: "Confirm",
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: _yellow,
+              onPrimary: _ink,
+              secondary: _yellow,
+              onSecondary: _ink,
+              surface: Colors.white,
+              onSurface: _ink,
+              onSurfaceVariant: _muted,
+              outline: _border,
+            ),
+            dialogTheme: DialogThemeData(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+            ),
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              headerBackgroundColor: _ink,
+              headerForegroundColor: Colors.white,
+              headerHeadlineStyle: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+                color: Colors.white,
+              ),
+              headerHelpStyle: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+              weekdayStyle: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: _muted,
+              ),
+              dayStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _ink,
+              ),
+              yearStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
+              todayBorder: const BorderSide(color: _yellow, width: 1.4),
+              todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _ink;
+                return _ink;
+              }),
+              todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _yellow;
+                return Colors.transparent;
+              }),
+              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _ink;
+                if (states.contains(WidgetState.disabled)) {
+                  return _muted.withValues(alpha: 0.35);
+                }
+                return _ink;
+              }),
+              dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _yellow;
+                return Colors.transparent;
+              }),
+              dayOverlayColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.pressed) ||
+                    states.contains(WidgetState.hovered)) {
+                  return _yellow.withValues(alpha: 0.18);
+                }
+                return null;
+              }),
+              yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _ink;
+                return _ink;
+              }),
+              yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return _yellow;
+                return Colors.transparent;
+              }),
+              dayShape: WidgetStateProperty.all(const CircleBorder()),
+              rangePickerHeaderBackgroundColor: _ink,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: _ink,
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                ),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _nextDate = picked);
   }
@@ -412,32 +597,32 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _page,
       body: Stack(
         children: [
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.top + 78,
-                ),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                  child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  child: Column(
+                    children: [
+                      Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(28),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 24,
-                          offset: const Offset(0, 8),
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
@@ -445,12 +630,21 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
+                          _isCreate ? "Create schedule" : "Edit schedule",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _muted,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
                           widget.equipment.name,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: _ink,
-                            letterSpacing: -0.3,
+                            letterSpacing: -0.5,
                             height: 1.15,
                           ),
                         ),
@@ -461,9 +655,10 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                             fontSize: 13.5,
                             fontWeight: FontWeight.w600,
                             color: _muted,
+                            letterSpacing: 0.3,
                           ),
                         ),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 22),
                         _label("Title"),
                         const SizedBox(height: 8),
                         _textCard(_title, "e.g. Filter cleaning"),
@@ -490,7 +685,7 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                         _label("Next Date"),
                         const SizedBox(height: 10),
                         Material(
-                          color: const Color(0xFFF8FAFC),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(16),
@@ -502,16 +697,14 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                               ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFFE2E8F0),
-                                ),
+                                border: Border.all(color: _border, width: 1),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(
                                     Icons.calendar_today_rounded,
-                                    size: 20,
-                                    color: _blue,
+                                    size: 18,
+                                    color: _ink,
                                   ),
                                   const SizedBox(width: 14),
                                   Text(
@@ -555,114 +748,86 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                       ],
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                  child: Row(
-                    children: [
-                      Material(
-                        color: const Color(0xFFF1F5F9),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: () => Navigator.pop(context),
-                          child: const SizedBox(
-                            width: 42,
-                            height: 42,
-                            child: Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 18,
-                              color: _ink,
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: FilledButton(
+                          onPressed: _saving ? null : _save,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _yellow,
+                            foregroundColor: _ink,
+                            disabledBackgroundColor:
+                                _yellow.withValues(alpha: 0.55),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
                             ),
                           ),
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(_ink),
+                                  ),
+                                )
+                              : Text(
+                                  _isCreate
+                                      ? "Create Schedule"
+                                      : "Save Changes",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
                         ),
                       ),
-                      const Spacer(),
-                      Text(
-                        _isCreate ? "Create Schedule" : "Edit Schedule",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const Spacer(),
-                      const SizedBox(width: 42),
                     ],
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _blue,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            _blue.withValues(alpha: 0.55),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, top + 8, 20, 0),
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => Navigator.pop(context),
+                      child: const SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Icon(Icons.arrow_back_rounded,
+                            size: 20, color: _ink),
                       ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.4,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Text(
-                              _isCreate
-                                  ? "Create Schedule"
-                                  : "Save Changes",
-                              style: const TextStyle(
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: Text(
+                      _isCreate ? "Create Schedule" : "Edit Schedule",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 44),
+                ],
               ),
             ),
           ),
@@ -684,9 +849,9 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _border, width: 1),
       ),
       child: TextField(
         controller: c,
@@ -715,11 +880,8 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _blue : const Color(0xFFF8FAFC),
+          color: selected ? _ink : _soft,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: selected ? _blue : const Color(0xFFE2E8F0),
-          ),
         ),
         child: Text(
           label,

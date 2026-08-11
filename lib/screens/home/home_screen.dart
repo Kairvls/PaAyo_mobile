@@ -5,18 +5,19 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
-  /// 0 = Report an issue, 1 = Manage every asset.
   final int initialPage;
-
   const HomeScreen({super.key, this.initialPage = 0});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+// ─────────────────────────────────────────────
+// Data
+// ─────────────────────────────────────────────
 class _HomeAction {
-  final String title;
   final String eyebrow;
+  final String headline;
   final String subtitle;
   final String cta;
   final String route;
@@ -24,8 +25,8 @@ class _HomeAction {
   final IconData icon;
 
   const _HomeAction({
-    required this.title,
     required this.eyebrow,
+    required this.headline,
     required this.subtitle,
     required this.cta,
     required this.route,
@@ -34,246 +35,308 @@ class _HomeAction {
   });
 }
 
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  static const _orange = Color(0xFFFBBF24);
+
   static const _actions = [
     _HomeAction(
-      title: "Report an issue,\nfast.",
-      eyebrow: "REPORT",
-      subtitle: "Take the first step to keep campus equipment working.",
-      cta: "Swipe to open report",
-      route: "/report",
-      image: "assets/images/report_issue_full_bleed.png",
-      icon: Icons.assignment_outlined,
+      eyebrow:  "REPORT",
+      headline: "Report Equipment\nBreakdowns",
+      subtitle: "Let us know about broken furniture,\nfaulty lights, or malfunctioning tech.",
+      cta:      "Report an Issue",
+      route:    "/report",
+      image:    "assets/images/report_issue_full_bleed.png",
+      icon:     Icons.assignment_outlined,
     ),
     _HomeAction(
-      title: "Manage every\nasset.",
-      eyebrow: "MAINTENANCE",
-      subtitle: "Scan QR codes to track status and log maintenance.",
-      cta: "Swipe to sign in",
-      route: "/login",
-      image: "assets/images/manage_equipment_full_bleed.jpg",
-      icon: Icons.qr_code_2_rounded,
+      eyebrow:  "MAINTENANCE",
+      headline: "Monitor Maintenance\nEquipment",
+      subtitle: "Scan QR codes to track status and\nlog maintenance history.",
+      cta:      "Sign In",
+      route:    "/login",
+      image:    "assets/images/equipment_full_bleed.png",
+      icon:     Icons.qr_code_2_rounded,
     ),
   ];
 
-  late final PageController _pageController;
-  late final AnimationController _enterController;
-  late final Animation<double> _fadeIn;
+  late final AnimationController _enterCtrl;
+  late final Animation<double>   _fadeIn;
+  late final Animation<Offset>   _slideUp;
 
-  int _index = 0;
-  int _swipeEpoch = 0;
-  bool _pendingSwipeReset = false;
+  int  _index = 0;
+  int  _epoch = 0;
+  bool _pendingReset = false;
 
   @override
   void initState() {
     super.initState();
-
     _index = widget.initialPage.clamp(0, _actions.length - 1);
-    _pageController = PageController(initialPage: _index);
 
-    _enterController = AnimationController(
+    _enterCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
     );
     _fadeIn = CurvedAnimation(
-      parent: _enterController,
-      curve: Curves.easeOut,
+      parent: _enterCtrl,
+      curve: const Interval(0.0, 0.9, curve: Curves.easeOut),
     );
-    _enterController.forward();
+    _slideUp = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end:   Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _enterCtrl,
+      curve:  const Interval(0.0, 1.0, curve: Curves.easeOutCubic),
+    ));
+    _enterCtrl.forward();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
-    _enterController.dispose();
+    _enterCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _openSelected() async {
+  Future<void> _open() async {
     await Navigator.pushNamed(context, _actions[_index].route);
     if (!mounted) return;
-    setState(() {
-      _swipeEpoch++;
-      _pendingSwipeReset = true;
-    });
+    setState(() { _epoch++; _pendingReset = true; });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _pendingSwipeReset = false);
+      setState(() => _pendingReset = false);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final action = _actions[_index];
+    final a    = _actions[_index];
+    final size = MediaQuery.sizeOf(context);
+    final top  = MediaQuery.paddingOf(context).top;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFF111111),
         body: FadeTransition(
           opacity: _fadeIn,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                itemCount: _actions.length,
-                onPageChanged: (i) => setState(() => _index = i),
-                itemBuilder: (context, i) {
-                  return Image.asset(
-                    _actions[i].image,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    alignment: Alignment.center,
-                    filterQuality: FilterQuality.high,
-                    isAntiAlias: true,
-                    gaplessPlayback: true,
-                  );
-                },
-              ),
-              const IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color(0x330F172A),
-                        Colors.transparent,
-                        Colors.transparent,
-                        Color(0xB30F172A),
-                        Color(0xF20F172A),
-                      ],
-                      stops: [0.0, 0.22, 0.42, 0.68, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                      child: Image.asset(
-                        "assets/images/paayo_logo_white.png",
-                        height: 78,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Image.asset(
-                          "assets/images/paayo_logo_second.png",
-                          height: 78,
-                          fit: BoxFit.contain,
+          child: SlideTransition(
+            position: _slideUp,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                final dx = details.primaryVelocity ?? 0;
+                if (dx < -200 && _index < _actions.length - 1) {
+                  setState(() => _index++);
+                } else if (dx > 200 && _index > 0) {
+                  setState(() => _index--);
+                }
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── PHOTO BLOCK ──────────────────────────────
+                SizedBox(
+                  height: size.height * 0.56,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Full-bleed photo with animated crossfade
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 420),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim, child: child,
+                        ),
+                        child: Image.asset(
+                          a.image,
+                          key:             ValueKey(_index),
+                          fit:             BoxFit.cover,
+                          alignment:       _index == 1
+                              ? Alignment.center
+                              : Alignment.topCenter,
+                          filterQuality:   FilterQuality.high,
+                          gaplessPlayback: true,
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 280),
-                            transitionBuilder: (child, anim) {
-                              return FadeTransition(
-                                opacity: anim,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.08),
-                                    end: Offset.zero,
-                                  ).animate(anim),
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: Column(
-                              key: ValueKey(_index),
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  action.title,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.8,
-                                    height: 1.1,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 28,
-                                      height: 1,
-                                      color: Colors.white.withValues(alpha: 0.55),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      action.eyebrow,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.85),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 2.4,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Container(
-                                      width: 28,
-                                      height: 1,
-                                      color: Colors.white.withValues(alpha: 0.55),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  action.subtitle,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.88),
-                                    fontSize: 14.5,
-                                    height: 1.45,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
+                      // Top fade for status bar legibility
+                      Positioned(
+                        top: 0, left: 0, right: 0,
+                        height: top + 72,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end:   Alignment.bottomCenter,
+                              colors: [
+                                const Color(0xFF111111).withValues(alpha: 0.72),
+                                Colors.transparent,
                               ],
                             ),
                           ),
-                          const SizedBox(height: 18),
-                          Row(
-                            children: List.generate(_actions.length, (i) {
-                              final active = i == _index;
-                              return AnimatedContainer(
+                        ),
+                      ),
+                      // Bottom fade into dark body
+                      Positioned(
+                        bottom: 0, left: 0, right: 0,
+                        height: 120,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end:   Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                const Color(0xFF111111),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Logo + eyebrow chip — same vertical center
+                      Positioned(
+                        top: top + 8,
+                        left: 16,
+                        right: 20,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/images/paayo_logo_big_original.png',
+                              height: 52,
+                              fit: BoxFit.contain,
+                            ),
+                            const Spacer(),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              child: Container(
+                                key: ValueKey(_index),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Text(
+                                  a.eyebrow,
+                                  style: const TextStyle(
+                                    color:       Colors.white,
+                                    fontSize:    10.5,
+                                    fontWeight:  FontWeight.w700,
+                                    letterSpacing: 1.6,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── CONTENT BLOCK ─────────────────────────────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+
+                        // Headline
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child:   SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.1),
+                                end:   Offset.zero,
+                              ).animate(anim),
+                              child: child,
+                            ),
+                          ),
+                          child: Column(
+                            key: ValueKey(_index),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                a.headline,
+                                style: const TextStyle(
+                                  color:       Colors.white,
+                                  fontSize:    34,
+                                  fontWeight:  FontWeight.w800,
+                                  letterSpacing: -0.8,
+                                  height:      1.12,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                a.subtitle,
+                                style: TextStyle(
+                                  color:      Colors.white.withValues(alpha: 0.55),
+                                  fontSize:   14.5,
+                                  height:     1.5,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        // Dot indicators
+                        Row(
+                          children: List.generate(_actions.length, (i) {
+                            final active = i == _index;
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => setState(() => _index = i),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 220),
-                                margin: const EdgeInsets.only(right: 7),
-                                height: 6,
-                                width: active ? 22 : 6,
+                                margin:   const EdgeInsets.only(right: 7),
+                                height:   6,
+                                width:    active ? 24 : 6,
                                 decoration: BoxDecoration(
                                   color: active
                                       ? Colors.white
-                                      : Colors.white.withValues(alpha: 0.35),
+                                      : Colors.white.withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                              );
-                            }),
-                          ),
-                          const SizedBox(height: 20),
-                          _SwipeToContinue(
-                            key: ValueKey('$_index-$_swipeEpoch'),
-                            label: action.cta,
-                            icon: action.icon,
-                            playReturnReset: _pendingSwipeReset,
-                            onCompleted: _openSelected,
-                          ),
-                        ],
-                      ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // CTA row
+                        _CtaRow(
+                          key:             ValueKey('$_index-$_epoch'),
+                          label:           a.cta,
+                          icon:            a.icon,
+                          playReturnReset: _pendingReset,
+                          onCompleted:     _open,
+                        ),
+
+                        const SizedBox(height: 32),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
+              ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -281,13 +344,16 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-class _SwipeToContinue extends StatefulWidget {
-  final String label;
-  final IconData icon;
-  final Future<void> Function() onCompleted;
-  final bool playReturnReset;
+// ─────────────────────────────────────────────
+// CTA Row  (yellow arrow pill  +  text + chevrons)
+// ─────────────────────────────────────────────
+class _CtaRow extends StatefulWidget {
+  final String                   label;
+  final IconData                 icon;
+  final Future<void> Function()  onCompleted;
+  final bool                     playReturnReset;
 
-  const _SwipeToContinue({
+  const _CtaRow({
     super.key,
     required this.label,
     required this.icon,
@@ -296,228 +362,201 @@ class _SwipeToContinue extends StatefulWidget {
   });
 
   @override
-  State<_SwipeToContinue> createState() => _SwipeToContinueState();
+  State<_CtaRow> createState() => _CtaRowState();
 }
 
-class _SwipeToContinueState extends State<_SwipeToContinue>
-    with TickerProviderStateMixin {
-  static const _blue = Color(0xFF2563EB);
-  static const _height = 64.0;
-  static const _thumb = 48.0;
-  static const _pad = 8.0;
+class _CtaRowState extends State<_CtaRow> with TickerProviderStateMixin {
+  static const _orange = Color(0xFFFBBF24);
+  static const _pill   = 56.0;
 
-  double _drag = 0;
-  double _maxDragValue = 0;
-  bool _completed = false;
-  bool _introQueued = false;
+  bool   _done         = false;
+  bool   _introQueued  = false;
+  double _dragProgress = 0.0; // 0..1, used to track swipe distance
 
-  late final AnimationController _slideController;
-  late final AnimationController _thumbPulseController;
-
-  double _maxDrag(double width) =>
-      (width - (_pad * 2) - _thumb).clamp(0.0, double.infinity);
+  late final AnimationController _pulseCtrl;
+  late final AnimationController _snapCtrl;
 
   @override
   void initState() {
     super.initState();
-    _slideController = AnimationController.unbounded(vsync: this)
-      ..addListener(() {
-        setState(() => _drag = _slideController.value.clamp(0.0, _maxDragValue));
-      });
+    _pulseCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 1300),
+    )..addListener(() { if (mounted) setState(() {}); });
 
-    _thumbPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..addListener(() {
-        if (mounted) setState(() {});
-      });
+    _snapCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 280),
+    );
 
     if (widget.playReturnReset) {
       _introQueued = true;
     } else {
-      _thumbPulseController.repeat(reverse: true);
+      _pulseCtrl.repeat(reverse: true);
     }
   }
 
   @override
   void dispose() {
-    _slideController.dispose();
-    _thumbPulseController.dispose();
+    _pulseCtrl.dispose();
+    _snapCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _springTo(double target, {double velocity = 0}) async {
-    await _slideController.animateWith(
-      SpringSimulation(
-        const SpringDescription(mass: 1, stiffness: 220, damping: 17),
-        _slideController.value,
-        target,
-        velocity,
-      ),
-    );
-  }
-
-  void _queueIntroIfNeeded(double maxDrag) {
-    if (!_introQueued || maxDrag <= 0) return;
+  void _queueIntroIfNeeded() {
+    if (!_introQueued) return;
     _introQueued = false;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _maxDragValue = maxDrag;
-      _completed = false;
-      _slideController.value = maxDrag;
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      _done = false;
+      _dragProgress = 0.0;
+      await Future<void>.delayed(const Duration(milliseconds: 80));
       if (!mounted) return;
-      await _springTo(0, velocity: -900);
-      if (!mounted) return;
-      _thumbPulseController.repeat(reverse: true);
+      _pulseCtrl.repeat(reverse: true);
     });
   }
 
-  void _onDragUpdate(DragUpdateDetails details, double maxDrag) {
-    if (_completed) return;
-    _thumbPulseController.stop();
-    _thumbPulseController.value = 0;
-    _slideController.stop();
-    _maxDragValue = maxDrag;
-    final next = (_drag + details.delta.dx).clamp(0.0, maxDrag);
-    _slideController.value = next;
+  Future<void> _trigger() async {
+    if (_done) return;
+    _done = true;
+    _pulseCtrl.stop();
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    await widget.onCompleted();
   }
 
-  Future<void> _onDragEnd(double maxDrag) async {
-    if (_completed) return;
-    _maxDragValue = maxDrag;
-    final progress = maxDrag <= 0 ? 0.0 : _drag / maxDrag;
-    if (progress >= 0.85) {
-      _completed = true;
-      _thumbPulseController.stop();
-      // Snap to the end instantly, then open the page with no spring delay.
-      _slideController.value = maxDrag;
-      setState(() => _drag = maxDrag);
-      await widget.onCompleted();
+  void _onDragUpdate(DragUpdateDetails d, double rowWidth) {
+    if (_done) return;
+    final travel = rowWidth - _pill;
+    setState(() {
+      _dragProgress = (_dragProgress + d.delta.dx / travel).clamp(0.0, 1.0);
+    });
+  }
+
+  Future<void> _onDragEnd(double rowWidth) async {
+    if (_done) return;
+    if (_dragProgress >= 0.6) {
+      await _trigger();
     } else {
-      await _springTo(0, velocity: -400);
-      if (!mounted) return;
-      _thumbPulseController.repeat(reverse: true);
+      // snap back
+      final start = _dragProgress;
+      _snapCtrl.value = 0;
+      _snapCtrl.addListener(() {
+        if (mounted) setState(() => _dragProgress = start * (1 - _snapCtrl.value));
+      });
+      await _snapCtrl.forward(from: 0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxDrag = _maxDrag(constraints.maxWidth);
-        _maxDragValue = maxDrag;
-        _queueIntroIfNeeded(maxDrag);
+    _queueIntroIfNeeded();
+    final pulse = 1.0 + _pulseCtrl.value * 0.05;
 
-        final progress = maxDrag <= 0 ? 0.0 : (_drag / maxDrag).clamp(0.0, 1.0);
-        final pulse = 1 + (_thumbPulseController.value * 0.045);
+    return LayoutBuilder(builder: (ctx, box) {
+      final rowWidth = box.maxWidth;
+      final travel   = rowWidth - _pill;
+      final thumbDx  = _dragProgress * travel;
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: (d) => _onDragUpdate(d, maxDrag),
-          onHorizontalDragEnd: (_) => _onDragEnd(maxDrag),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(40),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(
-                height: _height,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.22),
+      return GestureDetector(
+        behavior:               HitTestBehavior.opaque,
+        onTap:                  () => _trigger(),
+        onHorizontalDragUpdate: (d) => _onDragUpdate(d, rowWidth),
+        onHorizontalDragEnd:    (_) => _onDragEnd(rowWidth),
+        child: SizedBox(
+          height: _pill,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              // Static layout: pill | label | chevrons (bottom layer)
+              Row(
+                children: [
+                  const SizedBox(width: _pill),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:  MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          widget.label,
+                          style: const TextStyle(
+                            color:         Colors.white,
+                            fontSize:      16,
+                            fontWeight:    FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Swipe or tap to continue",
+                          style: TextStyle(
+                            color:      Colors.white.withValues(alpha: 0.4),
+                            fontSize:   11.5,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: List.generate(3, (i) => Opacity(
+                      opacity: 0.3 + i * 0.25,
+                      child: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white,
+                        size:  20,
+                      ),
+                    )),
+                  ),
+                ],
+              ),
+
+              // Trail painted OVER text so it covers label & chevrons
+              if (_dragProgress > 0)
+                Positioned(
+                  left: 0,
+                  child: Container(
+                    width:  thumbDx + _pill,
+                    height: _pill,
+                    decoration: BoxDecoration(
+                      // dimmer amber — distinct from the bright yellow thumb
+                      color:        const Color(0xFF111111).withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(_pill / 2),
+                    ),
                   ),
                 ),
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: (_pad * 2 + _thumb) + _drag,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              _blue.withValues(alpha: 0.08 + progress * 0.22),
-                              _blue.withValues(alpha: 0.18 + progress * 0.28),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(40),
+
+              // Draggable yellow circle on top
+              Positioned(
+                left: thumbDx,
+                child: Transform.scale(
+                  scale: pulse,
+                  child: Container(
+                    width:      _pill,
+                    height:     _pill,
+                    decoration: BoxDecoration(
+                      color:  _orange,
+                      shape:  BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color:      _orange.withValues(alpha: 0.45),
+                          blurRadius: 20,
+                          offset:     const Offset(0, 6),
                         ),
-                      ),
+                      ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      child: Opacity(
-                        opacity: (1 - progress * 1.25).clamp(0.0, 1.0),
-                        child: Transform.translate(
-                          offset: Offset(-8 * progress, 0),
-                          child: Row(
-                            children: [
-                              const SizedBox(width: _thumb),
-                              Expanded(
-                                child: Text(
-                                  widget.label,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.1,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.keyboard_double_arrow_right_rounded,
-                                color: Colors.white.withValues(alpha: 0.85),
-                                size: 22,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size:  22,
                     ),
-                    Positioned(
-                      left: _pad + _drag,
-                      top: _pad,
-                      child: Transform.scale(
-                        scale: pulse,
-                        child: Container(
-                          width: _thumb,
-                          height: _thumb,
-                          decoration: BoxDecoration(
-                            color: _blue,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: _blue.withValues(
-                                  alpha: 0.28 + progress * 0.25,
-                                ),
-                                blurRadius: 12 + progress * 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            progress > 0.82
-                                ? Icons.check_rounded
-                                : widget.icon,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 }

@@ -20,8 +20,7 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> {
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
-  static const _bg = Color(0xFFF3F4F6);
-  static const _cardGray = Color(0xFFF3F4F6);
+  static const _bg = Color(0xFFF5F5F5);
 
   final MaintenanceService _service = MaintenanceService();
   late final TextEditingController _search;
@@ -102,7 +101,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     if (widget.embedded) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _bg,
         body: SafeArea(
           bottom: false,
           child: Column(
@@ -149,9 +148,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               Container(
                 width: 44,
                 height: 44,
-                decoration: const BoxDecoration(
-                  color: _cardGray,
+                decoration: BoxDecoration(
+                  color: Colors.white,
                   shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: const Icon(
                   Icons.event_rounded,
@@ -186,8 +186,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
               ),
               Material(
-                color: _cardGray,
-                shape: const CircleBorder(),
+                color: Colors.white,
+                shape: const CircleBorder(
+                  side: BorderSide(color: Color(0xFFE5E7EB)),
+                ),
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: _openScanner,
@@ -211,8 +213,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: const Text(
               "Scan each unit’s QR on-site to update its schedule.",
@@ -234,12 +237,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       height: 52,
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
-        color: _cardGray,
-        borderRadius: BorderRadius.circular(30),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _muted, size: 22),
+          const Icon(Icons.search_rounded, color: _ink, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -247,11 +251,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               textInputAction: TextInputAction.search,
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => setState(() {}),
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: const InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
                 hintText: "Search...",
-                hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                hintStyle: TextStyle(
+                  color: _muted,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -259,12 +272,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             width: 1,
             height: 22,
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            color: const Color(0xFFCBD5E1),
+            color: const Color(0xFFEEF0F4),
           ),
           IconButton(
             tooltip: "Search",
             onPressed: () => setState(() {}),
-            icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+            icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -280,11 +293,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         padding: const EdgeInsets.only(left: 16, right: 6),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.search_rounded, color: _muted, size: 22),
+            const Icon(Icons.search_rounded, color: _ink, size: 22),
             const SizedBox(width: 10),
             Expanded(
               child: TextField(
@@ -292,11 +306,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 textInputAction: TextInputAction.search,
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => setState(() {}),
+                style: const TextStyle(
+                  color: _ink,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: const InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
                   hintText: "Search...",
-                  hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                  hintStyle: TextStyle(
+                    color: _muted,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -304,12 +327,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               width: 1,
               height: 22,
               margin: const EdgeInsets.symmetric(horizontal: 4),
-              color: const Color(0xFFCBD5E1),
+              color: const Color(0xFFEEF0F4),
             ),
             IconButton(
               tooltip: "Filter",
               onPressed: () => setState(() {}),
-              icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+              icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
               visualDensity: VisualDensity.compact,
             ),
           ],
@@ -320,153 +343,162 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Widget _buildListBody({required bool embedded}) {
     final dateFmt = DateFormat("MMM d, yyyy");
-    final cardColor = embedded ? _cardGray : Colors.white;
     final bottomPad = embedded ? 100.0 : 24.0;
 
-    return Column(
-      children: [
-        if (!embedded) _buildDirectorySearch(),
-        Expanded(
-          child: FutureBuilder<List<MaintenanceSchedule>>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text("Couldn't load schedules."),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                          onPressed: _reload, child: const Text("Retry")),
-                    ],
-                  ),
-                );
-              }
-
-              final items = _filter(snap.data ?? []);
-              if (items.isEmpty) {
-                final searching = _search.text.trim().isNotEmpty;
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      searching
-                          ? "No schedules match your search."
-                          : "No schedules yet.\nCreate them in the web admin or per equipment.",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: _muted, height: 1.4),
+    return ColoredBox(
+      color: _bg,
+      child: Column(
+        children: [
+          if (!embedded) _buildDirectorySearch(),
+          Expanded(
+            child: FutureBuilder<List<MaintenanceSchedule>>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text("Couldn't load schedules."),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                            onPressed: _reload, child: const Text("Retry")),
+                      ],
                     ),
-                  ),
-                );
-              }
+                  );
+                }
 
-              return RefreshIndicator(
-                onRefresh: () async => _reload(),
-                child: ListView.separated(
-                  padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPad),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final s = items[i];
-                    final color = _statusColor(s);
-                    return Material(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
+                final items = _filter(snap.data ?? []);
+                if (items.isEmpty) {
+                  final searching = _search.text.trim().isNotEmpty;
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        searching
+                            ? "No schedules match your search."
+                            : "No schedules yet.\nCreate them in the web admin or per equipment.",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: _muted, height: 1.4),
+                      ),
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async => _reload(),
+                  child: ListView.separated(
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPad),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, i) {
+                      final s = items[i];
+                      final color = _statusColor(s);
+                      return Material(
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        onTap: () => _open(s),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEAF1FF),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  s.isDueSoon
-                                      ? Icons.schedule_rounded
-                                      : Icons.event_rounded,
-                                  color: const Color(0xFF2563EB),
-                                ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => _open(s),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      s.title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 15,
-                                        color: _ink,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      [
-                                        s.equipmentName ?? "Equipment",
-                                        if (s.room != null &&
-                                            s.room!.isNotEmpty)
-                                          s.room!,
-                                      ].join(" · "),
-                                      style: const TextStyle(
-                                        color: _muted,
-                                        fontSize: 12.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      s.nextDate != null
-                                          ? "Next: ${dateFmt.format(s.nextDate!)} · ${s.frequency}"
-                                          : s.frequency,
-                                      style: const TextStyle(
-                                        color: _ink,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  s.urgencyLabel,
-                                  style: TextStyle(
-                                    color: color,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEAF1FF),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    s.isDueSoon
+                                        ? Icons.schedule_rounded
+                                        : Icons.event_rounded,
+                                    color: const Color(0xFF2563EB),
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                          color: _ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        [
+                                          s.equipmentName ?? "Equipment",
+                                          if (s.room != null &&
+                                              s.room!.isNotEmpty)
+                                            s.room!,
+                                        ].join(" · "),
+                                        style: const TextStyle(
+                                          color: _muted,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        s.nextDate != null
+                                            ? "Next: ${dateFmt.format(s.nextDate!)} · ${s.frequency}"
+                                            : s.frequency,
+                                        style: const TextStyle(
+                                          color: _ink,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    s.urgencyLabel,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

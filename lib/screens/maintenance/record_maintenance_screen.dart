@@ -18,10 +18,12 @@ class RecordMaintenanceScreen extends StatefulWidget {
 }
 
 class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
-  static const _ink = Color(0xFF0F172A);
-  static const _muted = Color(0xFF94A3B8);
-  static const _bg = Color(0xFFF4F6F8);
-  static const _blue = Color(0xFF2563EB);
+  static const _ink = Color(0xFF111111);
+  static const _muted = Color(0xFF8A8A8A);
+  static const _page = Color(0xFFF3F3F3);
+  static const _soft = Color(0xFFF7F7F7);
+  static const _yellow = Color(0xFFFBBF24);
+  static const _border = Color(0xFFE8E8E8);
 
   static const _statuses = [
     "Pending",
@@ -124,9 +126,15 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           icon: const Icon(Icons.check_circle_rounded,
-              color: Color(0xFF16A34A), size: 40),
-          title: const Text("Maintenance saved"),
+              color: Color(0xFF22C55E), size: 40),
+          title: const Text(
+            "Maintenance saved",
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
           content: Text(
             "$_status record saved for ${widget.equipment.name}.",
             textAlign: TextAlign.center,
@@ -134,8 +142,14 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(ctx),
-              style: FilledButton.styleFrom(backgroundColor: _blue),
-              child: const Text("Done"),
+              style: FilledButton.styleFrom(
+                backgroundColor: _yellow,
+                foregroundColor: _ink,
+              ),
+              child: const Text(
+                "Done",
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ],
         ),
@@ -156,148 +170,184 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _page,
       body: Stack(
         children: [
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.top + 78,
-                ),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.equipment.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: _ink,
-                            letterSpacing: -0.3,
-                            height: 1.15,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Record fix",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.equipment.name,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                                letterSpacing: -0.5,
+                                height: 1.15,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.equipment.qrId,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            _label("Status"),
+                            const SizedBox(height: 12),
+                            _pills(
+                              _statuses,
+                              _status,
+                              (v) => setState(() => _status = v),
+                            ),
+                            const SizedBox(height: 22),
+                            _label("Findings"),
+                            const SizedBox(height: 8),
+                            _input(
+                              _findings,
+                              "What did you find during this maintenance?",
+                              maxLines: 4,
+                            ),
+                            const SizedBox(height: 18),
+                            _label("Repair Action", optional: true),
+                            const SizedBox(height: 8),
+                            _input(
+                              _repairAction,
+                              "What action did you take?",
+                              maxLines: 3,
+                            ),
+                            if (_isReplacement) ...[
+                              const SizedBox(height: 18),
+                              _label("Replacement Remarks", optional: true),
+                              const SizedBox(height: 8),
+                              _input(
+                                _replacementRemarks,
+                                "Notes about the replacement.",
+                                maxLines: 3,
+                              ),
+                            ],
+                            const SizedBox(height: 18),
+                            _label("Proof Photo", optional: true),
+                            const SizedBox(height: 10),
+                            _buildProofPicker(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: FilledButton(
+                          onPressed: _saving ? null : _save,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _yellow,
+                            foregroundColor: _ink,
+                            disabledBackgroundColor:
+                                _yellow.withValues(alpha: 0.55),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
                           ),
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(_ink),
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.build_rounded, size: 18),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      "Save Record",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.equipment.qrId,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: _muted,
-                          ),
-                        ),
-                        const SizedBox(height: 26),
-                        _label("Status"),
-                        const SizedBox(height: 12),
-                        _pills(
-                          _statuses,
-                          _status,
-                          (v) => setState(() => _status = v),
-                        ),
-                        const SizedBox(height: 22),
-                        _label("Findings"),
-                        const SizedBox(height: 8),
-                        _input(
-                          _findings,
-                          "What did you find during this maintenance?",
-                          maxLines: 4,
-                        ),
-                        const SizedBox(height: 18),
-                        _label("Repair Action", optional: true),
-                        const SizedBox(height: 8),
-                        _input(
-                          _repairAction,
-                          "What action did you take?",
-                          maxLines: 3,
-                        ),
-                        if (_isReplacement) ...[
-                          const SizedBox(height: 18),
-                          _label("Replacement Remarks", optional: true),
-                          const SizedBox(height: 8),
-                          _input(
-                            _replacementRemarks,
-                            "Notes about the replacement.",
-                            maxLines: 3,
-                          ),
-                        ],
-                        const SizedBox(height: 18),
-                        _label("Proof Photo", optional: true),
-                        const SizedBox(height: 10),
-                        _buildProofPicker(),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, top + 8, 20, 0),
+              child: Row(
+                children: [
+                  _CircleButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.pop(context),
                   ),
+                  const Expanded(
+                    child: Text(
+                      "Record Fix",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 44),
                 ],
               ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                  child: Row(
-                    children: [
-                      _RoundIconButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        onTap: () => Navigator.pop(context),
-                      ),
-                      const Spacer(),
-                      const Text(
-                        "Record Fix",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const Spacer(),
-                      const SizedBox(width: 42),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: _BottomSaveBar(
-              label: "Save Record",
-              saving: _saving,
-              onPressed: _save,
             ),
           ),
         ],
@@ -310,7 +360,7 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
       return Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             child: Image.file(
               _proof!,
               width: double.infinity,
@@ -341,22 +391,21 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
     }
 
     return Material(
-      color: const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(18),
+      color: _soft,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: _pickImage,
         child: Container(
           width: double.infinity,
           height: 110,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: const Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add_a_photo_outlined, color: _blue, size: 26),
+              Icon(Icons.add_a_photo_outlined, color: _ink, size: 26),
               SizedBox(height: 8),
               Text(
                 "Attach a photo",
@@ -403,9 +452,9 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _border, width: 1),
       ),
       child: TextField(
         controller: c,
@@ -444,13 +493,8 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: selected == option ? _blue : const Color(0xFFF8FAFC),
+                color: selected == option ? _ink : _soft,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: selected == option
-                      ? _blue
-                      : const Color(0xFFE2E8F0),
-                ),
               ),
               child: Text(
                 option,
@@ -467,88 +511,24 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
   }
 }
 
-class _RoundIconButton extends StatelessWidget {
+class _CircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _RoundIconButton({required this.icon, required this.onTap});
+  const _CircleButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF1F5F9),
+      color: Colors.white,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomSaveBar extends StatelessWidget {
-  final String label;
-  final bool saving;
-  final VoidCallback onPressed;
-
-  const _BottomSaveBar({
-    required this.label,
-    required this.saving,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton(
-              onPressed: saving ? null : onPressed,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor:
-                  const Color(0xFF2563EB).withValues(alpha: 0.55),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: saving
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-            ),
-          ),
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 20, color: const Color(0xFF111111)),
         ),
       ),
     );

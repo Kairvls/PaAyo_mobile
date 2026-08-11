@@ -28,7 +28,7 @@ class EquipmentScreen extends StatefulWidget {
 class _EquipmentScreenState extends State<EquipmentScreen> {
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
-  static const _cardGray = Color(0xFFF3F4F6);
+  static const _pageBg = Color(0xFFF5F5F5);
 
   final MaintenanceService _service = MaintenanceService();
   late final TextEditingController _search;
@@ -94,7 +94,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   Widget build(BuildContext context) {
     if (widget.embedded) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _pageBg,
         body: SafeArea(
           bottom: false,
           child: Column(
@@ -109,9 +109,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _pageBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _pageBg,
         elevation: 0,
         foregroundColor: _ink,
         title: Text(
@@ -134,8 +134,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF1FF),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Text(
                 _attentionOnly
@@ -152,7 +153,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: _buildDirectorySearch(fill: _cardGray),
+            child: _buildDirectorySearch(fill: Colors.white),
           ),
           Expanded(child: _buildListBody()),
         ],
@@ -183,9 +184,10 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               Container(
                 width: 44,
                 height: 44,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3F4F6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
                   shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: const Icon(
                   Icons.inventory_2_rounded,
@@ -220,8 +222,10 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 ),
               ),
               Material(
-                color: const Color(0xFFF3F4F6),
-                shape: const CircleBorder(),
+                color: Colors.white,
+                shape: const CircleBorder(
+                  side: BorderSide(color: Color(0xFFE5E7EB)),
+                ),
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: _openScanner,
@@ -245,8 +249,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: const Text(
               "Only QR-tagged equipment appears here. Scan on-site to manage it.",
@@ -268,23 +273,33 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       height: 52,
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(30),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _muted, size: 22),
+          const Icon(Icons.search_rounded, color: _ink, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _search,
               textInputAction: TextInputAction.search,
               onSubmitted: _reload,
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: const InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
                 hintText: "Search...",
-                hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                hintStyle: TextStyle(
+                  color: _muted,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -292,12 +307,12 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             width: 1,
             height: 22,
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            color: const Color(0xFFCBD5E1),
+            color: const Color(0xFFEEF0F4),
           ),
           IconButton(
             tooltip: "Search",
             onPressed: () => _reload(_search.text),
-            icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+            icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -311,22 +326,36 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
         color: fill,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: fill == Colors.white
+              ? const Color(0xFFE5E7EB)
+              : Colors.transparent,
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _muted, size: 22),
+          const Icon(Icons.search_rounded, color: _ink, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _search,
               textInputAction: TextInputAction.search,
               onSubmitted: _reload,
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: const InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
                 hintText: "Search...",
-                hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                hintStyle: TextStyle(
+                  color: _muted,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -334,12 +363,12 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             width: 1,
             height: 22,
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            color: const Color(0xFFCBD5E1),
+            color: const Color(0xFFEEF0F4),
           ),
           IconButton(
             tooltip: "Search",
             onPressed: () => _reload(_search.text),
-            icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+            icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -349,7 +378,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 
   Widget _buildListBody() {
     return ColoredBox(
-      color: Colors.white,
+      color: _pageBg,
       child: FutureBuilder<List<Equipment>>(
         future: _future,
         builder: (context, snap) {
@@ -414,13 +443,17 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 final e = items[i];
                 final color = _statusColor(e.status);
                 return Material(
-                  color: _cardGray,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: () => _open(e),
-                    child: Padding(
+                    child: Container(
                       padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
                       child: Row(
                         children: [
                           Container(

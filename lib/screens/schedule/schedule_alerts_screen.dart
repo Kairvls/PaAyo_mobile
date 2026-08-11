@@ -109,17 +109,25 @@ class _ScheduleAlertsScreenState extends State<ScheduleAlertsScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: Container(
               height: 52,
               padding: const EdgeInsets.only(left: 16, right: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search_rounded, color: _muted, size: 22),
+                  const Icon(Icons.search_rounded, color: _ink, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
@@ -127,10 +135,15 @@ class _ScheduleAlertsScreenState extends State<ScheduleAlertsScreen> {
                       textInputAction: TextInputAction.search,
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => setState(() {}),
+                      style: const TextStyle(
+                        color: _ink,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                       decoration: const InputDecoration(
                         isCollapsed: true,
                         border: InputBorder.none,
-                        hintText: "Search...",
+                        hintText: "Search alerts...",
                         hintStyle: TextStyle(color: _muted, fontSize: 14.5),
                       ),
                     ),
@@ -139,12 +152,12 @@ class _ScheduleAlertsScreenState extends State<ScheduleAlertsScreen> {
                     width: 1,
                     height: 22,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
-                    color: const Color(0xFFCBD5E1),
+                    color: const Color(0xFFE2E8F0),
                   ),
                   IconButton(
                     tooltip: "Filter",
                     onPressed: () => setState(() {}),
-                    icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+                    icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -399,7 +412,7 @@ class _AlertCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    schedule.urgencyLabel,
+                    schedule.relativeDueLabel,
                     style: TextStyle(
                       color: color,
                       fontSize: 11.5,

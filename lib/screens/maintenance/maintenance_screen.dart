@@ -140,12 +140,13 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
               height: 52,
               padding: const EdgeInsets.only(left: 16, right: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(30),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search_rounded, color: _muted, size: 22),
+                  const Icon(Icons.search_rounded, color: _ink, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
@@ -153,11 +154,20 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                       textInputAction: TextInputAction.search,
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => setState(() {}),
+                      style: const TextStyle(
+                        color: _ink,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                       decoration: const InputDecoration(
                         isCollapsed: true,
                         border: InputBorder.none,
-                        hintText: "Search...",
-                        hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                        hintText: "Search fixes...",
+                        hintStyle: TextStyle(
+                          color: _muted,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -165,12 +175,12 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                     width: 1,
                     height: 22,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
-                    color: const Color(0xFFCBD5E1),
+                    color: const Color(0xFFEEF0F4),
                   ),
                   IconButton(
                     tooltip: "Filter",
                     onPressed: () => setState(() {}),
-                    icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+                    icon: const Icon(Icons.tune_rounded, color: _ink, size: 22),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],

@@ -43,6 +43,7 @@ dependencies:
   flutter_appauth: ^12.0.2
   flutter_secure_storage: ^9.2.2
   qr_flutter: ^4.1.0
+  flutter_native_splash: ^2.4.4
   
 
 dev_dependencies:
@@ -104,23 +105,18 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_native_splash:
-  # FoodGo-style: navy field + centered PaAyo logo + buildings bottom-left.
-  color: "#0F172A"
-  image: assets/images/native_splash_logo.png
-  branding: assets/images/native_splash_buildings.png
-  branding_mode: bottomLeft
-  branding_bottom_padding: 0
+  # White field + PaAyo logo (from native_splash_paayo_logo_original.png,
+  # black bg knocked out so it sits cleanly on white)
+  color: "#FFFFFF"
+  image: assets/images/native_splash_paayo_logo_splash.png
   android: true
   ios: true
   web: false
   fullscreen: true
   android_12:
-    color: "#0F172A"
-    image: assets/images/native_splash_android12.png
-    icon_background_color: "#0F172A"
-    # Android 12 only allows a tiny centered branding strip (800x320),
-    # which cannot match the FoodGo bottom-left look — omit it and
-    # continue the layout on the Flutter SplashScreen instead.
+    color: "#FFFFFF"
+    image: assets/images/native_splash_paayo_logo_splash.png
+    icon_background_color: "#FFFFFF"
 
 
 
