@@ -53,6 +53,13 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
 
   static const _tools = [
     _MaintenanceTool(
+      title: "Reports",
+      subtitle: "Incoming tickets",
+      meta: "Status updates",
+      route: "/reports",
+      imageAsset: "assets/images/report.png",
+    ),
+    _MaintenanceTool(
       title: "Record Fix",
       subtitle: "Log a repair",
       meta: "On-site",
@@ -507,6 +514,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                 sliver: SliverToBoxAdapter(child: _buildWelcomeCard()),
               ),
+              SliverToBoxAdapter(child: _buildStatsSection()),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 sliver: SliverToBoxAdapter(
@@ -521,27 +529,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-                  child: Row(
-                    children: [
-                      for (int i = 0; i < _tools.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 14),
-                        Expanded(
-                          child: AspectRatio(
-                            aspectRatio: 1.12,
-                            child: _ToolCard(
-                              tool: _tools[i],
-                              onTap: () => _onToolTap(_tools[i]),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+              SliverToBoxAdapter(child: _buildQuickActions()),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 48),
                 sliver: SliverToBoxAdapter(child: _buildRecentSection()),
@@ -553,11 +541,151 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
     );
   }
 
+  Widget _buildQuickActions() {
+    const gap = 14.0;
+    const aspect = 1.12;
+    const minCardWidth = 128.0;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxWidth;
+          final neededForRow =
+              minCardWidth * _tools.length + gap * (_tools.length - 1);
+          final useCarousel = available < neededForRow;
+          final cardWidth = useCarousel
+              ? (available * 0.44).clamp(minCardWidth, 156.0)
+              : (available - gap * (_tools.length - 1)) / _tools.length;
+          final cardHeight = cardWidth / aspect;
+
+          Widget buildCard(_MaintenanceTool tool) {
+            return SizedBox(
+              width: cardWidth,
+              height: cardHeight,
+              child: _ToolCard(
+                tool: tool,
+                onTap: () => _onToolTap(tool),
+              ),
+            );
+          }
+
+          if (!useCarousel) {
+            return SizedBox(
+              height: cardHeight,
+              child: Row(
+                children: [
+                  for (int i = 0; i < _tools.length; i++) ...[
+                    if (i > 0) const SizedBox(width: gap),
+                    Expanded(
+                      child: SizedBox(
+                        height: cardHeight,
+                        child: _ToolCard(
+                          tool: _tools[i],
+                          onTap: () => _onToolTap(_tools[i]),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }
+
+          return SizedBox(
+            height: cardHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _tools.length,
+              separatorBuilder: (_, __) => const SizedBox(width: gap),
+              itemBuilder: (context, index) => buildCard(_tools[index]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _onToolTap(_MaintenanceTool tool) async {
     // Quick Actions always open the full page (with back arrow). Bottom-nav
     // tabs stay as the embedded switcher.
     await _pushAndKeepSearchClosed(Navigator.pushNamed(context, tool.route));
     if (mounted) await _refreshRecent(keepScroll: true);
+  }
+
+  Widget _buildStatsRow(MaintenanceRecent recent) {
+    return Row(
+      children: [
+        _StatChip(
+          label: "Equipment",
+          value: "${recent.equipmentCount}",
+          onTap: () => _pushAndKeepSearchClosed(
+            Navigator.pushNamed(context, "/equipment"),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _StatChip(
+          label: "Due soon",
+          value: "${recent.dueSoonSchedulesCount}",
+          onTap: () => _pushAndKeepSearchClosed(
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ScheduleAlertsScreen(
+                  filter: ScheduleAlertFilter.dueSoon,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _StatChip(
+          label: "Overdue",
+          value: "${recent.overdueSchedules}",
+          onTap: () => _pushAndKeepSearchClosed(
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ScheduleAlertsScreen(
+                  filter: ScheduleAlertFilter.overdue,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatsSection() {
+    return FutureBuilder<MaintenanceRecent>(
+      future: _recentFuture,
+      builder: (context, snap) {
+        final recent = snap.data ?? _cachedRecent;
+
+        if (recent == null &&
+            snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: SizedBox(
+              height: 72,
+              child: Center(
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+            ),
+          );
+        }
+
+        if (recent == null) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: _buildStatsRow(recent),
+        );
+      },
+    );
   }
 
   Widget _buildRecentSection() {
@@ -616,49 +744,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _StatChip(
-                  label: "Equipment",
-                  value: "${recent.equipmentCount}",
-                  onTap: () => _pushAndKeepSearchClosed(
-                    Navigator.pushNamed(context, "/equipment"),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _StatChip(
-                  label: "Due soon",
-                  value: "${recent.dueSoonSchedulesCount}",
-                  onTap: () => _pushAndKeepSearchClosed(
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ScheduleAlertsScreen(
-                          filter: ScheduleAlertFilter.dueSoon,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _StatChip(
-                  label: "Overdue",
-                  value: "${recent.overdueSchedules}",
-                  onTap: () => _pushAndKeepSearchClosed(
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ScheduleAlertsScreen(
-                          filter: ScheduleAlertFilter.overdue,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
             if (overdueList.isNotEmpty) ...[
-              const SizedBox(height: 22),
               _SectionHeader(
                 title: "Overdue",
                 onSeeAll: () => _pushAndKeepSearchClosed(
@@ -1013,40 +1099,51 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Stack(
+            alignment: Alignment.center,
             children: [
-              _CircleIcon(
-                icon: Icons.grid_view_rounded,
-                onTap: () {},
-              ),
-              FutureBuilder<MaintenanceRecent>(
-                future: _recentFuture,
-                builder: (context, snap) {
-                  final recent = snap.data ?? _cachedRecent;
-                  final alertCount = (recent?.dueSoonSchedulesCount ?? 0) +
-                      (recent?.overdueSchedules ?? 0);
-                  return _CircleIcon(
-                    icon: Icons.notifications_none_rounded,
-                    badge: alertCount > 0,
-                    onTap: () async {
-                      await _pushAndKeepSearchClosed(
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ScheduleAlertsScreen(),
-                          ),
-                        ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _CircleIcon(
+                    icon: Icons.grid_view_rounded,
+                    onTap: () {},
+                  ),
+                  FutureBuilder<MaintenanceRecent>(
+                    future: _recentFuture,
+                    builder: (context, snap) {
+                      final recent = snap.data ?? _cachedRecent;
+                      final alertCount = (recent?.dueSoonSchedulesCount ?? 0) +
+                          (recent?.overdueSchedules ?? 0);
+                      return _CircleIcon(
+                        icon: Icons.notifications_none_rounded,
+                        badge: alertCount > 0,
+                        onTap: () async {
+                          await _pushAndKeepSearchClosed(
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ScheduleAlertsScreen(),
+                              ),
+                            ),
+                          );
+                          if (mounted) await _refreshRecent(keepScroll: true);
+                        },
                       );
-                      if (mounted) await _refreshRecent(keepScroll: true);
                     },
-                  );
-                },
+                  ),
+                ],
+              ),
+              Image.asset(
+                "assets/images/paayo_logo_original.png",
+                height: 34,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Text(
+          //const SizedBox(height: 20),
+          /*Text(
             "Hi, $_name!",
             style: const TextStyle(
               fontSize: 26,
@@ -1063,7 +1160,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
               color: _muted,
               fontWeight: FontWeight.w500,
             ),
-          ),
+          ),*/
           const SizedBox(height: 16),
           _buildSearchBar(),
           const SizedBox(height: 20),
@@ -1321,6 +1418,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
     if (shouldLogout == true) {
       await _storage.delete(key: "token");
       await _storage.delete(key: "name");
+      await _storage.delete(key: "user_id");
       if (context.mounted) {
         Navigator.pushNamedAndRemoveUntil(context, "/login", (r) => false);
       }
@@ -1860,73 +1958,83 @@ class _ToolCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          children: [
-            // Soft edge so white cards still read on white page
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFEEF0F4)),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final imageSize =
+                (constraints.maxWidth * 0.48).clamp(52.0, 68.0);
+
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFEEF0F4)),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            // Text — top/left + bottom meta
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tool.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _ink,
-                      height: 1.15,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tool.subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: _muted,
-                      height: 1.25,
-                    ),
-                  ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 72),
-                    child: Text(
-                      tool.meta,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 12 + imageSize * 0.2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tool.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                          height: 1.15,
+                          letterSpacing: -0.2,
+                        ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        tool.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _muted,
+                          height: 1.25,
+                        ),
+                      ),
+                      const Spacer(),
+                      Padding(
+                        padding: EdgeInsets.only(right: imageSize * 0.55),
+                        child: Text(
+                          tool.meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: IgnorePointer(
+                    child: Image.asset(
+                      tool.imageAsset,
+                      width: imageSize,
+                      height: imageSize,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     ),
                   ),
-                ],
-              ),
-            ),
-            // Bottom-right illustration
-            Positioned(
-              right: -6,
-              bottom: -8,
-              child: IgnorePointer(
-                child: Image.asset(
-                  tool.imageAsset,
-                  width: 94,
-                  height: 94,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

@@ -7,25 +7,30 @@ class MicrosoftAuthService {
   static const String tenantId =
       "0597b255-289d-49a3-8316-33b7a3174f92";
 
-  /// Must match Azure → Authentication → Mobile and desktop applications.
-  /// Keep this simple (no signature-hash path). The MSAL Android hash URI
-  /// often fails to return into flutter_appauth after "Continue".
   static const String redirectUrl =
       "msauth://ph.edu.stiormoc.paayo";
 
   final FlutterAppAuth appAuth = const FlutterAppAuth();
 
-  Future<AuthorizationTokenResponse?> signIn() async {
+  AuthorizationServiceConfiguration get _serviceConfiguration {
+    return AuthorizationServiceConfiguration(
+      authorizationEndpoint:
+          "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize",
+      tokenEndpoint:
+          "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token",
+    );
+  }
+
+  /// First sign-in: account picker. Returning sign-in: saved email + password (+ MFA).
+  Future<AuthorizationTokenResponse?> signIn({String? loginHint}) async {
+    final trimmedHint = loginHint?.trim();
+    final hasHint = trimmedHint != null && trimmedHint.isNotEmpty;
+
     return await appAuth.authorizeAndExchangeCode(
       AuthorizationTokenRequest(
         clientId,
         redirectUrl,
-        serviceConfiguration: AuthorizationServiceConfiguration(
-          authorizationEndpoint:
-              "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize",
-          tokenEndpoint:
-              "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token",
-        ),
+        serviceConfiguration: _serviceConfiguration,
         scopes: const [
           "openid",
           "profile",
@@ -33,7 +38,8 @@ class MicrosoftAuthService {
           "offline_access",
           "User.Read",
         ],
-        promptValues: const ["select_account"],
+        promptValues: [hasHint ? "login" : "select_account"],
+        additionalParameters: hasHint ? {"login_hint": trimmedHint} : null,
       ),
     );
   }

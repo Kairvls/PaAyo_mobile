@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart';
 
 import '../models/equipment.dart';
+import '../models/maintenance_report.dart';
 
 /// Thrown when a scanned QR code has no matching equipment (HTTP 404).
 class EquipmentNotFoundException implements Exception {
@@ -275,6 +276,117 @@ class MaintenanceService {
         "last_date": lastDate != null ? fmt(lastDate) : null,
         "status": status,
       },
+    );
+  }
+
+  /// GET /maintenance/reports
+  Future<List<MaintenanceReport>> listReports({
+    String? status,
+    String? urgency,
+    String? search,
+    bool archive = false,
+    int limit = 50,
+  }) async {
+    await _attachToken();
+    final res = await dio.get(
+      "$baseUrl/maintenance/reports",
+      queryParameters: {
+        if (status != null && status.isNotEmpty) "status": status,
+        if (urgency != null && urgency.isNotEmpty) "urgency": urgency,
+        if (search != null && search.trim().isNotEmpty) "search": search.trim(),
+        if (archive) "archive": 1,
+        "limit": limit,
+      },
+    );
+    final data = res.data;
+
+    if (res.statusCode == 200 && data is Map && data["reports"] is List) {
+      final reports = (data["reports"] as List)
+          .whereType<Map>()
+          .map((e) =>
+              MaintenanceReport.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+      reports.sort((a, b) {
+        final aUrgent = a.urgency == "Urgent" ? 0 : 1;
+        final bUrgent = b.urgency == "Urgent" ? 0 : 1;
+        final byUrgent = aUrgent.compareTo(bUrgent);
+        if (byUrgent != 0) return byUrgent;
+
+        final aDate = a.updatedAt ??
+            a.submittedAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.updatedAt ??
+            b.submittedAt ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final byDate = bDate.compareTo(aDate);
+        if (byDate != 0) return byDate;
+        return b.id.compareTo(a.id);
+      });
+
+      return reports;
+    }
+
+    return [];
+  }
+
+  /// GET /maintenance/reports/{id}
+  Future<MaintenanceReport?> getReport(int id) async {
+    await _attachToken();
+    final res = await dio.get("$baseUrl/maintenance/reports/$id");
+    final data = res.data;
+
+    if (res.statusCode == 200 &&
+        data is Map &&
+        data["success"] == true &&
+        data["report"] is Map) {
+      return MaintenanceReport.fromJson(
+        Map<String, dynamic>.from(data["report"] as Map),
+      );
+    }
+
+    return null;
+  }
+
+  /// POST /maintenance/reports/{id}/status
+  Future<Response> updateReportStatus({
+    required int reportId,
+    required String status,
+    String? remarks,
+    List<int>? reportItemIds,
+    File? proofImage,
+    bool undo = false,
+  }) async {
+    await _attachToken();
+
+    final formData = FormData();
+    formData.fields.add(MapEntry("status", status));
+    if (remarks != null && remarks.isNotEmpty) {
+      formData.fields.add(MapEntry("remarks", remarks));
+    }
+    if (undo) {
+      formData.fields.add(const MapEntry("undo", "1"));
+    }
+    if (reportItemIds != null) {
+      for (final itemId in reportItemIds) {
+        formData.fields.add(MapEntry("report_item_ids[]", itemId.toString()));
+      }
+    }
+    if (proofImage != null) {
+      formData.files.add(
+        MapEntry(
+          "proof_image",
+          await MultipartFile.fromFile(
+            proofImage.path,
+            filename: basename(proofImage.path),
+          ),
+        ),
+      );
+    }
+
+    return await dio.post(
+      "$baseUrl/maintenance/reports/$reportId/status",
+      data: formData,
     );
   }
 }

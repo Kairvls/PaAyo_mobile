@@ -33,6 +33,7 @@ class _ReportEquipmentItem {
   final String displayLabel;
   final String issue;
   final String? manualName;
+  final String? openReportTicket;
   /// Raw equipment fields for uniqueness details (long-press).
   final Map<String, dynamic>? details;
 
@@ -42,6 +43,7 @@ class _ReportEquipmentItem {
     required this.issue,
     this.id,
     this.manualName,
+    this.openReportTicket,
     this.details,
   });
 }
@@ -172,12 +174,23 @@ class _ReportScreenState extends State<ReportScreen> {
       parts.add("#$id");
     }
 
+    final openReportTicket = _openReportTicketOf(map);
+    if (openReportTicket != null) {
+      parts.add("Open report: $openReportTicket");
+    }
+
     return parts.isEmpty ? name : "$name · ${parts.join(" · ")}";
   }
 
   int? _equipmentIdOf(dynamic item) {
     if (item is! Map) return null;
     return int.tryParse(item["equipment_id"]?.toString() ?? "");
+  }
+
+  String? _openReportTicketOf(dynamic item) {
+    if (item is! Map) return null;
+    final ticket = item["open_report_ticket_code"]?.toString().trim() ?? "";
+    return ticket.isEmpty ? null : ticket;
   }
 
   Set<int> get _addedEquipmentIds => selectedItems
@@ -223,6 +236,8 @@ class _ReportScreenState extends State<ReportScreen> {
       add("Model", map["equipment_model"]);
       add("Placement zone", map["equipment_placement_zone"]);
       add("Equipment ID", map["equipment_id"]);
+      add("Open report", map["open_report_ticket_code"]);
+      add("Report status", map["open_report_status"]);
     }
 
     if (issue != null && issue.trim().isNotEmpty) {
@@ -812,6 +827,20 @@ class _ReportScreenState extends State<ReportScreen> {
                                                 color: _muted,
                                               ),
                                             ),
+                                            if ((item.openReportTicket ?? "")
+                                                .isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                "Open report ${item.openReportTicket} — submit will add your update there.",
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFFB45309),
+                                                ),
+                                              ),
+                                            ],
                                             const SizedBox(height: 4),
                                             Text(
                                               item.type ==
@@ -1604,6 +1633,8 @@ class _ReportScreenState extends State<ReportScreen> {
           id: selectedEquipmentId,
           displayLabel: selectedEquipmentLabel!,
           issue: issue,
+          openReportTicket:
+              _openReportTicketOf(selectedEquipmentDetails ?? {}),
           details: selectedEquipmentDetails,
         ),
       );
@@ -1875,6 +1906,27 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  String _submitConfirmMessage() {
+    final openReportItems = selectedItems
+        .where((item) => (item.openReportTicket ?? "").isNotEmpty)
+        .length;
+    if (selectedItems.length > 1) {
+      if (openReportItems > 0) {
+        return "Submit ${selectedItems.length} equipment items? "
+            "$openReportItems already have open reports and your updates will be merged there.";
+      }
+      return "Submit ${selectedItems.length} equipment items in one maintenance report?";
+    }
+    final ticket = selectedItems
+        .map((item) => item.openReportTicket)
+        .firstWhere((ticket) => (ticket ?? "").isNotEmpty, orElse: () => null);
+    if (ticket != null) {
+      return "This equipment already has open report $ticket. "
+          "Your update will be added to that ticket.";
+    }
+    return "Send this maintenance report now?";
+  }
+
   Future<void> confirmSubmitReport() async {
     final submitted = await showDialog<bool>(
       context: context,
@@ -1883,6 +1935,7 @@ class _ReportScreenState extends State<ReportScreen> {
       builder: (dialogContext) {
         var phase = "confirm";
         String errorMessage = "Failed to submit report.";
+        String successMessage = "Your maintenance report was sent successfully.";
         var isSending = false;
 
         return StatefulBuilder(
@@ -1930,6 +1983,22 @@ class _ReportScreenState extends State<ReportScreen> {
                   isSending = false;
                   setDialogState(() => phase = "error");
                   return;
+                }
+
+                if (data is Map) {
+                  if (data["merged"] == true) {
+                    successMessage = data["message"]?.toString() ??
+                        "Your update was added to the existing open report.";
+                  } else if (selectedItems.length > 1) {
+                    successMessage = data["message"]?.toString() ??
+                        "Your report with ${selectedItems.length} equipment items was sent successfully.";
+                  } else {
+                    successMessage = data["message"]?.toString() ??
+                        successMessage;
+                  }
+                } else if (selectedItems.length > 1) {
+                  successMessage =
+                      "Your report with ${selectedItems.length} equipment items was sent successfully.";
                 }
 
                 setDialogState(() => phase = "success");
@@ -2047,9 +2116,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        selectedItems.length > 1
-                            ? "Your report with ${selectedItems.length} equipment items was sent successfully."
-                            : "Your maintenance report was sent successfully.",
+                        successMessage,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 13.5,
@@ -2202,9 +2269,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      selectedItems.length > 1
-                          ? "Submit ${selectedItems.length} equipment items in one maintenance report?"
-                          : "Send this maintenance report now?",
+                      _submitConfirmMessage(),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 13.5,
@@ -2545,20 +2610,26 @@ class _ReportScreenState extends State<ReportScreen> {
                                             : null);
                                     final selected = selectedItem != null &&
                                         selectedItem == itemId;
+                                    final openReportTicket =
+                                        _openReportTicketOf(item);
 
                                     return Padding(
                                       padding: const EdgeInsets.only(bottom: 8),
                                       child: Material(
                                         color: selected
                                             ? const Color(0xFFEFF6FF)
-                                            : Colors.white,
+                                            : openReportTicket != null
+                                                ? const Color(0xFFFFFBEB)
+                                                : Colors.white,
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(_radius),
                                           side: BorderSide(
                                             color: selected
                                                 ? const Color(0xFF2563EB)
-                                                : _border,
+                                                : openReportTicket != null
+                                                    ? const Color(0xFFFCD34D)
+                                                    : _border,
                                           ),
                                         ),
                                         child: InkWell(
@@ -2616,7 +2687,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                                 Expanded(
                                                   child: Text(
                                                     label(item),
-                                                    maxLines: 2,
+                                                    maxLines: 3,
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                     style: const TextStyle(

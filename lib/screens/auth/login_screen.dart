@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../services/auth_service.dart';
@@ -25,14 +29,73 @@ class _LoginScreenState extends State<LoginScreen> {
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
   static const _soft = Color(0xFFF3F4F6);
+  static const _microsoftUpnKey = "microsoft_upn";
 
   bool loading = false;
+  String? savedUpn;
   _LoginFeedbackKind feedbackKind = _LoginFeedbackKind.none;
   String feedbackTitle = "";
   String feedbackMessage = "";
 
   final MicrosoftAuthService microsoft = MicrosoftAuthService();
   final FlutterSecureStorage storage = const FlutterSecureStorage();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedUpn();
+  }
+
+  Future<void> _loadSavedUpn() async {
+    final upn = await storage.read(key: _microsoftUpnKey);
+    if (!mounted || upn == null || upn.trim().isEmpty) return;
+
+    setState(() {
+      savedUpn = upn.trim();
+    });
+  }
+
+  String? _upnFromIdToken(String? idToken) {
+    if (idToken == null) return null;
+
+    final parts = idToken.split(".");
+    if (parts.length < 2) return null;
+
+    try {
+      final payload =
+          utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final claims = jsonDecode(payload);
+      if (claims is! Map) return null;
+
+      final preferred = claims["preferred_username"]?.toString().trim();
+      if (preferred != null && preferred.isNotEmpty) return preferred;
+
+      return claims["upn"]?.toString().trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveUpn(String upn) async {
+    final trimmed = upn.trim();
+    if (trimmed.isEmpty) return;
+
+    await storage.write(key: _microsoftUpnKey, value: trimmed);
+    if (!mounted) return;
+
+    setState(() {
+      savedUpn = trimmed;
+    });
+  }
+
+  Future<void> _clearSavedUpn() async {
+    await storage.delete(key: _microsoftUpnKey);
+    if (!mounted) return;
+
+    setState(() {
+      savedUpn = null;
+    });
+  }
 
   void _clearFeedback() {
     setState(() {
@@ -77,13 +140,12 @@ class _LoginScreenState extends State<LoginScreen> {
         text.contains("unauthorized") ||
         text.contains("forbidden") ||
         text.contains("not authorized") ||
-        text.contains("not allowed") ||
-        text.contains("maintenance")) {
+        text.contains("not allowed")) {
       _showFeedback(
         kind: _LoginFeedbackKind.denied,
         title: "Access not allowed",
         message:
-            "This Microsoft account is not authorized for equipment management. Only STI College Ormoc Maintenance Personnel can continue.",
+            "This Microsoft account is not authorized. Only STI College Ormoc Maintenance Personnel or Purchaser can continue.",
       );
       return;
     }
@@ -103,11 +165,15 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final detail = error.toString().replaceFirst("Exception: ", "").trim();
+    debugPrint("Login error: $error");
+
     _showFeedback(
       kind: _LoginFeedbackKind.generic,
       title: "Sign-in unsuccessful",
-      message:
-          "Something went wrong while signing in. Please try again with your Maintenance Personnel account.",
+      message: detail.isEmpty
+          ? "Something went wrong while signing in. Please try again with an authorized account."
+          : detail,
     );
   }
 
@@ -146,8 +212,25 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     return null;
   }
+  int? _extractRoleId(Map data) {
+    final candidates = <dynamic>[
+      data["user"] is Map ? data["user"]["role"] : null,
+      data["role_id"],
+      data["role"],
+    ];
+    for (final c in candidates) {
+      final id = int.tryParse(c?.toString() ?? "");
+      if (id != null) return id;
+    }
+    return null;
+  }
 
-  Future<void> login() async {
+  String _dashboardRouteForRole(int? roleId) {
+    if (roleId == 3) return "/purchaser-dashboard";
+    return "/dashboard";
+  }
+
+  Future<void> login({bool useAnotherAccount = false}) async {
     _clearFeedback();
 
     setState(() {
@@ -155,7 +238,26 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final result = await microsoft.signIn();
+      if (useAnotherAccount) {
+        await _clearSavedUpn();
+      }
+
+      AuthorizationTokenResponse? result;
+      final hasSavedAccount = !useAnotherAccount &&
+          savedUpn != null &&
+          savedUpn!.trim().isNotEmpty;
+
+      try {
+        result = await microsoft.signIn(
+          loginHint: hasSavedAccount ? savedUpn : null,
+        );
+      } catch (e) {
+        if (hasSavedAccount) {
+          result = await microsoft.signIn();
+        } else {
+          rethrow;
+        }
+      }
 
       if (result == null) {
         throw Exception("Login cancelled.");
@@ -164,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final accessToken = result.accessToken;
 
       if (accessToken == null) {
-        throw Exception("No access token received.");
+        throw Exception("No access token received from Microsoft.");
       }
 
       final response = await AuthService().login(accessToken);
@@ -198,11 +300,22 @@ class _LoginScreenState extends State<LoginScreen> {
         await storage.write(key: "user_id", value: userId.toString());
       }
 
+      final roleId = _extractRoleId(data);
+      if (roleId != null) {
+        await storage.write(key: "role_id", value: roleId.toString());
+      }
+
+      final idToken = result.idToken;
+      final upn = _upnFromIdToken(idToken);
+      if (upn != null) {
+        await _saveUpn(upn);
+      }
+
       if (!mounted) return;
 
       Navigator.pushReplacementNamed(
         context,
-        "/dashboard",
+        _dashboardRouteForRole(roleId),
       );
     } on DioException catch (e) {
       if (!mounted) return;
@@ -213,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
           kind: _LoginFeedbackKind.denied,
           title: "Access not allowed",
           message:
-              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel in PaAyo. Please use an authorized account or contact your administrator.",
+              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel or Purchaser in PaAyo. Please use an authorized account or contact your administrator.",
         );
       } else {
         _mapError(e);
@@ -412,11 +525,16 @@ class _LoginScreenState extends State<LoginScreen> {
               _Office365Button(
                 loading: loading,
                 denied: feedbackKind == _LoginFeedbackKind.denied,
-                onPressed: loading ? null : login,
+                onPressed: loading
+                    ? null
+                    : () => login(
+                          useAnotherAccount:
+                              feedbackKind == _LoginFeedbackKind.denied,
+                        ),
               ),
               const SizedBox(height: 14),
               const Text(
-                "Maintenance Personnel only",
+                "Maintenance Personnel & Purchaser",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,

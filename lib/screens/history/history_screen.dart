@@ -109,42 +109,90 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: Container(
-              height: 52,
+              height: 54,
               padding: const EdgeInsets.only(left: 16, right: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(30),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFCBD5E1), width: 1.25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search_rounded, color: _muted, size: 22),
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _accent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.search_rounded,
+                      color: _accent,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                       controller: _search,
                       textInputAction: TextInputAction.search,
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => setState(() {}),
+                      style: const TextStyle(
+                        color: _ink,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                       decoration: const InputDecoration(
                         isCollapsed: true,
                         border: InputBorder.none,
-                        hintText: "Search...",
-                        hintStyle: TextStyle(color: _muted, fontSize: 14.5),
+                        hintText: "Search equipment, room, or personnel...",
+                        hintStyle: TextStyle(
+                          color: _muted,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
-                  Container(
-                    width: 1,
-                    height: 22,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    color: const Color(0xFFCBD5E1),
-                  ),
+                  if (_search.text.trim().isNotEmpty)
+                    IconButton(
+                      tooltip: "Clear search",
+                      onPressed: () {
+                        _search.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: _muted,
+                        size: 20,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    )
+                  else
+                    Container(
+                      width: 1,
+                      height: 24,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: const Color(0xFFE2E8F0),
+                    ),
                   IconButton(
                     tooltip: "Filter",
                     onPressed: () => setState(() {}),
-                    icon: const Icon(Icons.tune_rounded, color: _muted, size: 22),
+                    icon: const Icon(
+                      Icons.tune_rounded,
+                      color: _ink,
+                      size: 22,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
