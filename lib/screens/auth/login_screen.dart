@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/microsoft_auth_service.dart';
+import '../../services/role_session.dart';
 import '../home/home_screen.dart';
 
 enum _LoginFeedbackKind {
@@ -145,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
         kind: _LoginFeedbackKind.denied,
         title: "Access not allowed",
         message:
-            "This Microsoft account is not authorized. Only STI College Ormoc Maintenance Personnel or Purchaser can continue.",
+            "This Microsoft account is not authorized. Only STI College Ormoc Maintenance Personnel can continue.",
       );
       return;
     }
@@ -211,23 +212,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (id != null) return id;
     }
     return null;
-  }
-  int? _extractRoleId(Map data) {
-    final candidates = <dynamic>[
-      data["user"] is Map ? data["user"]["role"] : null,
-      data["role_id"],
-      data["role"],
-    ];
-    for (final c in candidates) {
-      final id = int.tryParse(c?.toString() ?? "");
-      if (id != null) return id;
-    }
-    return null;
-  }
-
-  String _dashboardRouteForRole(int? roleId) {
-    if (roleId == 3) return "/purchaser-dashboard";
-    return "/dashboard";
   }
 
   Future<void> login({bool useAnotherAccount = false}) async {
@@ -300,10 +284,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await storage.write(key: "user_id", value: userId.toString());
       }
 
-      final roleId = _extractRoleId(data);
-      if (roleId != null) {
-        await storage.write(key: "role_id", value: roleId.toString());
-      }
+      await RoleSession.persistFromLogin(Map<String, dynamic>.from(data));
 
       final idToken = result.idToken;
       final upn = _upnFromIdToken(idToken);
@@ -315,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacementNamed(
         context,
-        _dashboardRouteForRole(roleId),
+        RoleSession.dashboardRoute,
       );
     } on DioException catch (e) {
       if (!mounted) return;
@@ -326,7 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
           kind: _LoginFeedbackKind.denied,
           title: "Access not allowed",
           message:
-              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel or Purchaser in PaAyo. Please use an authorized account or contact your administrator.",
+              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel in PaAyo. Please use an authorized account or contact your administrator.",
         );
       } else {
         _mapError(e);
@@ -534,7 +515,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                "Maintenance Personnel & Purchaser",
+                "Maintenance Personnel only",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,

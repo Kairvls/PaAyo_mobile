@@ -13,9 +13,8 @@ import 'screens/history/history_screen.dart';
 import 'screens/schedule/schedule_screen.dart';
 import 'screens/maintenance/maintenance_screen.dart';
 import 'screens/reports/reports_screen.dart';
-import 'screens/purchaser/purchaser_home_screen.dart';
-import 'screens/purchaser/purchaser_urgent_reports_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/semester/semester_inspections_screen.dart';
 
 void main() {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -46,8 +45,7 @@ class PrismMobile extends StatelessWidget {
         '/schedule': (_) => const ScheduleScreen(),
         '/maintenance': (_) => const MaintenanceScreen(),
         '/reports': (_) => const ReportsScreen(),
-        '/purchaser-dashboard': (_) => const PurchaserHomeScreen(),
-        '/purchaser-reports': (_) => const PurchaserUrgentReportsScreen(),
+        '/semester-inspections': (_) => const SemesterInspectionsScreen(),
       },
     );
   }

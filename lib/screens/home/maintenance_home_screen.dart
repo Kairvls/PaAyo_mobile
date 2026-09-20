@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
+import '../../services/role_session.dart';
 import '../../utils/equipment_icon.dart';
 import '../equipment/equipment_screen.dart';
 import '../qr/qr_scanner_screen.dart';
@@ -58,6 +59,13 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       meta: "Status updates",
       route: "/reports",
       imageAsset: "assets/images/report.png",
+    ),
+    _MaintenanceTool(
+      title: "Semester Check",
+      subtitle: "Campus inspection",
+      meta: "On-site",
+      route: "/semester-inspections",
+      imageAsset: "assets/images/qrscanner.png",
     ),
     _MaintenanceTool(
       title: "Record Fix",
@@ -1416,9 +1424,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
     );
 
     if (shouldLogout == true) {
-      await _storage.delete(key: "token");
-      await _storage.delete(key: "name");
-      await _storage.delete(key: "user_id");
+      await RoleSession.clear();
       if (context.mounted) {
         Navigator.pushNamedAndRemoveUntil(context, "/login", (r) => false);
       }

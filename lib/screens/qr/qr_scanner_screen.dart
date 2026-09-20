@@ -3,22 +3,33 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
+import '../../services/semester_inspection_service.dart';
 import '../equipment/equipment_profile_screen.dart';
 import '../history/equipment_history_screen.dart';
 import '../maintenance/record_maintenance_screen.dart';
 import '../schedule/equipment_schedule_screen.dart';
+import '../semester/semester_inspect_screen.dart';
 
 /// Where to land after a successful equipment QR scan.
-enum ScanDestination { profile, record, history, schedule }
+enum ScanDestination { profile, record, history, schedule, semesterInspect }
 
 enum _ScanPhase { scanning, found }
 
 class QRScannerScreen extends StatefulWidget {
   final ScanDestination destination;
+  final int? campaignId;
+  final List<String> conditions;
 
   const QRScannerScreen({
     super.key,
     this.destination = ScanDestination.profile,
+    this.campaignId,
+    this.conditions = const [
+      "OK",
+      "Malfunctioning",
+      "Defective",
+      "Destroyed",
+    ],
   });
 
   @override
@@ -34,6 +45,8 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   final MaintenanceService _service = MaintenanceService();
+  final SemesterInspectionService _semesterService =
+      SemesterInspectionService();
 
   late final AnimationController _lineController;
 
@@ -70,6 +83,11 @@ class _QRScannerScreenState extends State<QRScannerScreen>
 
     _handling = true;
     await _controller.stop();
+
+    if (widget.destination == ScanDestination.semesterInspect) {
+      await _handleSemesterScan(code);
+      return;
+    }
 
     Equipment equipment;
     try {
@@ -123,6 +141,67 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     await _controller.start();
   }
 
+  Future<void> _handleSemesterScan(String code) async {
+    final campaignId = widget.campaignId;
+    if (campaignId == null) {
+      await _resumeWithMessage("No campaign selected for inspection.");
+      return;
+    }
+
+    try {
+      final item = await _semesterService.resolveByQr(campaignId, code);
+      _missCount = 0;
+      _lastMissedCode = null;
+
+      if (!mounted) return;
+      setState(() => _phase = _ScanPhase.found);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => SemesterInspectScreen(
+            campaignId: campaignId,
+            item: item,
+            conditions: widget.conditions,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+      if (saved == true) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      setState(() => _phase = _ScanPhase.scanning);
+      _handling = false;
+      await _controller.start();
+    } on SemesterInspectionException catch (e) {
+      _missCount += 1;
+      _lastMissedCode = code;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+      setState(() => _phase = _ScanPhase.scanning);
+
+      if (_missCount >= _missLimit) {
+        await _showTroubleSheet();
+        return;
+      }
+
+      await Future<void>.delayed(_missCooldown);
+      if (!mounted) return;
+      _handling = false;
+      await _controller.start();
+    } catch (_) {
+      await _resumeWithMessage(
+        "Couldn't reach the server. Check your connection.",
+      );
+    }
+  }
+
   Widget _screenFor(Equipment equipment) {
     switch (widget.destination) {
       case ScanDestination.record:
@@ -131,6 +210,8 @@ class _QRScannerScreenState extends State<QRScannerScreen>
         return EquipmentHistoryScreen(equipment: equipment);
       case ScanDestination.schedule:
         return EquipmentScheduleScreen(equipment: equipment);
+      case ScanDestination.semesterInspect:
+        return EquipmentProfileScreen(equipment: equipment);
       case ScanDestination.profile:
         return EquipmentProfileScreen(equipment: equipment);
     }

@@ -25,6 +25,9 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   bool _archiveMode = false;
 
+  /// null = all, "Urgent", "Non-Urgent"
+  String? _urgencyFilter;
+
   static const _activeFilters = [
     ("Pending", "Pending"),
     ("Processing", "Processing"),
@@ -84,10 +87,17 @@ class _ReportsScreenState extends State<ReportsScreen>
     super.dispose();
   }
 
+  void _setUrgencyFilter(String? urgency) {
+    if (_urgencyFilter == urgency) return;
+    setState(() => _urgencyFilter = urgency);
+    _reload();
+  }
+
   void _reload() {
     setState(() {
       _future = _service.listReports(
         status: _filters[_tabs.index].$1,
+        urgency: _urgencyFilter,
         search: _search.text.trim().isEmpty ? null : _search.text.trim(),
         archive: _archiveMode,
       );
@@ -158,7 +168,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _search,
               decoration: InputDecoration(
@@ -174,6 +184,32 @@ class _ReportsScreenState extends State<ReportsScreen>
               onSubmitted: (_) => _reload(),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                _UrgencyChip(
+                  label: "All",
+                  selected: _urgencyFilter == null,
+                  onTap: () => _setUrgencyFilter(null),
+                ),
+                const SizedBox(width: 8),
+                _UrgencyChip(
+                  label: "Urgent",
+                  selected: _urgencyFilter == "Urgent",
+                  accent: const Color(0xFFDC2626),
+                  onTap: () => _setUrgencyFilter("Urgent"),
+                ),
+                const SizedBox(width: 8),
+                _UrgencyChip(
+                  label: "Non-Urgent",
+                  selected: _urgencyFilter == "Non-Urgent",
+                  accent: const Color(0xFF2563EB),
+                  onTap: () => _setUrgencyFilter("Non-Urgent"),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: FutureBuilder<List<MaintenanceReport>>(
               future: _future,
@@ -185,11 +221,17 @@ class _ReportsScreenState extends State<ReportsScreen>
                 final reports = snapshot.data ?? [];
 
                 if (reports.isEmpty) {
+                  final statusLabel = _filters[_tabs.index].$2.toLowerCase();
+                  final urgencyLabel = switch (_urgencyFilter) {
+                    "Urgent" => "urgent ",
+                    "Non-Urgent" => "non-urgent ",
+                    _ => "",
+                  };
                   return Center(
                     child: Text(
                       _archiveMode
-                          ? "No archived ${_filters[_tabs.index].$2.toLowerCase()} reports."
-                          : "No ${_filters[_tabs.index].$2.toLowerCase()} reports.",
+                          ? "No archived $urgencyLabel$statusLabel reports."
+                          : "No $urgencyLabel$statusLabel reports.",
                       style: const TextStyle(color: _muted),
                     ),
                   );
@@ -327,6 +369,56 @@ class _ReportsScreenState extends State<ReportsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _UrgencyChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color? accent;
+  final VoidCallback onTap;
+
+  const _UrgencyChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ?? const Color(0xFF0F172A);
+    return Material(
+      color: selected
+          ? color.withValues(alpha: accent == null ? 1 : 0.12)
+          : Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? (accent ?? const Color(0xFF0F172A))
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? (accent == null ? Colors.white : color)
+                  : const Color(0xFF64748B),
+            ),
+          ),
+        ),
       ),
     );
   }
