@@ -15,10 +15,10 @@ class EquipmentScheduleScreen extends StatefulWidget {
 }
 
 class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
-  static const _ink = Color(0xFF111111);
-  static const _muted = Color(0xFF8A8A8A);
-  static const _page = Color(0xFFF3F3F3);
-  static const _yellow = Color(0xFFFBBF24);
+  static const _ink = Color(0xFF111827);
+  static const _muted = Color(0xFF9CA3AF);
+  static const _page = Color(0xFFF3F4F6);
+  static const _accent = Color(0xFFFFF200);
 
   final MaintenanceService _service = MaintenanceService();
   late Future<List<MaintenanceSchedule>> _future;
@@ -35,7 +35,7 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
 
   Color _statusColor(MaintenanceSchedule schedule) {
     if (schedule.isOverdue) return const Color(0xFFEF4444);
-    if (schedule.isDueSoon) return _yellow;
+    if (schedule.isDueSoon) return _accent;
     final s = schedule.status.toLowerCase();
     if (s.contains("completed")) return const Color(0xFF22C55E);
     return _ink;
@@ -76,8 +76,8 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
       backgroundColor: _page,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,
-        backgroundColor: _yellow,
-        foregroundColor: _ink,
+        backgroundColor: const Color(0xFF0025CC),
+        foregroundColor: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         icon: const Icon(Icons.add_rounded),
@@ -225,8 +225,8 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
           FilledButton.icon(
             onPressed: _create,
             style: FilledButton.styleFrom(
-              backgroundColor: _yellow,
-              foregroundColor: _ink,
+              backgroundColor: const Color(0xFF0025CC),
+              foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -293,7 +293,7 @@ class _ScheduleCard extends StatelessWidget {
                       child: Text(
                         schedule.relativeDueLabel,
                         style: TextStyle(
-                          color: color == const Color(0xFFFBBF24)
+                          color: color == const Color(0xFFFFF200)
                               ? const Color(0xFF92400E)
                               : color,
                           fontSize: 12,
@@ -368,12 +368,13 @@ class _ScheduleFormScreen extends StatefulWidget {
 }
 
 class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
-  static const _ink = Color(0xFF111111);
-  static const _muted = Color(0xFF8A8A8A);
-  static const _page = Color(0xFFF3F3F3);
-  static const _soft = Color(0xFFF7F7F7);
-  static const _yellow = Color(0xFFFBBF24);
-  static const _border = Color(0xFFE8E8E8);
+  static const _ink = Color(0xFF111827);
+  static const _muted = Color(0xFF9CA3AF);
+  static const _page = Color(0xFFF3F4F6);
+  static const _soft = Color(0xFFF3F4F6);
+  static const _accent = Color(0xFFFFF200);
+  static const _blue = Color(0xFF0025CC);
+  static const _border = Color(0xFFE5E7EB);
 
   static const _statuses = ["Active", "Completed", "Overdue"];
   static const _frequencies = [
@@ -430,9 +431,9 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: _yellow,
+              primary: _accent,
               onPrimary: _ink,
-              secondary: _yellow,
+              secondary: _accent,
               onSecondary: _ink,
               surface: Colors.white,
               onSurface: _ink,
@@ -453,7 +454,7 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(28),
               ),
-              headerBackgroundColor: _ink,
+              headerBackgroundColor: _blue,
               headerForegroundColor: Colors.white,
               headerHeadlineStyle: const TextStyle(
                 fontSize: 28,
@@ -481,13 +482,13 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                 fontWeight: FontWeight.w700,
                 color: _ink,
               ),
-              todayBorder: const BorderSide(color: _yellow, width: 1.4),
+              todayBorder: const BorderSide(color: _accent, width: 1.4),
               todayForegroundColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) return _ink;
                 return _ink;
               }),
               todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return _yellow;
+                if (states.contains(WidgetState.selected)) return _accent;
                 return Colors.transparent;
               }),
               dayForegroundColor: WidgetStateProperty.resolveWith((states) {
@@ -498,13 +499,13 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                 return _ink;
               }),
               dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return _yellow;
+                if (states.contains(WidgetState.selected)) return _accent;
                 return Colors.transparent;
               }),
               dayOverlayColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.pressed) ||
                     states.contains(WidgetState.hovered)) {
-                  return _yellow.withValues(alpha: 0.18);
+                  return _accent.withValues(alpha: 0.18);
                 }
                 return null;
               }),
@@ -513,11 +514,11 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                 return _ink;
               }),
               yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return _yellow;
+                if (states.contains(WidgetState.selected)) return _accent;
                 return Colors.transparent;
               }),
               dayShape: WidgetStateProperty.all(const CircleBorder()),
-              rangePickerHeaderBackgroundColor: _ink,
+              rangePickerHeaderBackgroundColor: _blue,
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
@@ -601,233 +602,223 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
 
     return Scaffold(
       backgroundColor: _page,
-      body: Stack(
+      body: Column(
         children: [
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                  child: Column(
-                    children: [
-                      Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
+            child: Row(
+              children: [
+                Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(context),
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(Icons.arrow_back_rounded,
+                          size: 20, color: _ink),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isCreate ? "Create schedule" : "Edit schedule",
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _muted,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.equipment.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: _ink,
-                            letterSpacing: -0.5,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.equipment.qrId,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: _muted,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        _label("Title"),
-                        const SizedBox(height: 8),
-                        _textCard(_title, "e.g. Filter cleaning"),
-                        const SizedBox(height: 18),
-                        _label("Description"),
-                        const SizedBox(height: 8),
-                        _textCard(_description, "Optional details", maxLines: 3),
-                        const SizedBox(height: 18),
-                        _label("Frequency"),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final f in _frequencies)
-                              _chip(
-                                f,
-                                _frequency == f,
-                                () => setState(() => _frequency = f),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        _label("Next Date"),
-                        const SizedBox(height: 10),
-                        Material(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: _pickDate,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: _border, width: 1),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.calendar_today_rounded,
-                                    size: 18,
-                                    color: _ink,
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Text(
-                                    _nextDate == null
-                                        ? "Select a date"
-                                        : DateFormat("MMMM d, yyyy")
-                                            .format(_nextDate!),
-                                    style: TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: _nextDate == null ? _muted : _ink,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  const Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: _muted,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (!_isCreate) ...[
-                          const SizedBox(height: 22),
-                          _label("Status"),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final s in _statuses)
-                                _chip(
-                                  s,
-                                  _status == s,
-                                  () => setState(() => _status = s),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: FilledButton(
-                          onPressed: _saving ? null : _save,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _yellow,
-                            foregroundColor: _ink,
-                            disabledBackgroundColor:
-                                _yellow.withValues(alpha: 0.55),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.4,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(_ink),
-                                  ),
-                                )
-                              : Text(
-                                  _isCreate
-                                      ? "Create Schedule"
-                                      : "Save Changes",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, top + 8, 20, 0),
-              child: Row(
-                children: [
-                  Material(
-                    color: Colors.white,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.pop(context),
-                      child: const SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: Icon(Icons.arrow_back_rounded,
-                            size: 20, color: _ink),
-                      ),
+                Expanded(
+                  child: Text(
+                    _isCreate ? "Create Schedule" : "Edit Schedule",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                      letterSpacing: -0.2,
                     ),
                   ),
-                  Expanded(
-                    child: Text(
-                      _isCreate ? "Create Schedule" : "Edit Schedule",
-                      textAlign: TextAlign.center,
+                ),
+                const SizedBox(width: 44),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isCreate ? "Create schedule" : "Edit schedule",
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.equipment.name,
+                      style: const TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: _ink,
-                        letterSpacing: -0.2,
+                        letterSpacing: -0.5,
+                        height: 1.15,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.equipment.qrId,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: _muted,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    _label("Title"),
+                    const SizedBox(height: 8),
+                    _textCard(_title, "e.g. Filter cleaning"),
+                    const SizedBox(height: 18),
+                    _label("Description"),
+                    const SizedBox(height: 8),
+                    _textCard(_description, "Optional details", maxLines: 3),
+                    const SizedBox(height: 18),
+                    _label("Frequency"),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final f in _frequencies)
+                          _chip(
+                            f,
+                            _frequency == f,
+                            () => setState(() => _frequency = f),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    _label("Next Date"),
+                    const SizedBox(height: 10),
+                    Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _pickDate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: _border, width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 18,
+                                color: _ink,
+                              ),
+                              const SizedBox(width: 14),
+                              Text(
+                                _nextDate == null
+                                    ? "Select a date"
+                                    : DateFormat("MMMM d, yyyy")
+                                        .format(_nextDate!),
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: _nextDate == null ? _muted : _ink,
+                                ),
+                              ),
+                              const Spacer(),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: _muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!_isCreate) ...[
+                      const SizedBox(height: 22),
+                      _label("Status"),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final s in _statuses)
+                            _chip(
+                              s,
+                              _status == s,
+                              () => setState(() => _status = s),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _blue,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        _blue.withValues(alpha: 0.55),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
                   ),
-                  const SizedBox(width: 44),
-                ],
+                  child: _saving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          _isCreate ? "Create Schedule" : "Save Changes",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                ),
               ),
             ),
           ),
@@ -880,7 +871,7 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _ink : _soft,
+          color: selected ? _blue : _soft,
           borderRadius: BorderRadius.circular(22),
         ),
         child: Text(

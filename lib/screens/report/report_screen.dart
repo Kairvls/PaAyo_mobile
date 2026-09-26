@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
 import 'dart:async';
 import 'dart:io';
@@ -49,16 +50,19 @@ class _ReportEquipmentItem {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-  static const _ink = Color(0xFF111111);
-  static const _muted = Color(0xFF8A8A8A);
+  /// Matches STI-PRISM mobile Maintenance Report modal tokens.
+  static const _ink = Color(0xFF1A1A2E);
+  static const _muted = Color(0xFF6B7280);
   static const _soft = Color(0xFFF3F4F6);
-  static const _blue = Color(0xFF111111);
-  static const _chip = Color(0xFFF3F4F6);
+  static const _blue = Color(0xFF0025CC);
+  static const _blueSoft = Color(0xFFF3F6FF);
   static const _page = Color(0xFFFFFFFF);
-  static const _amber = Color(0xFFFBBF24);
-  static const _panel = Color(0xFF0F172A);
+  static const _amber = Color(0xFFFFF200);
   static const _border = Color(0xFFE5E7EB);
-  static const _radius = 8.0;
+  static const _borderSoft = Color(0xFFECEFF4);
+  static const _placeholder = Color(0xFF9CA3AF);
+  static const _radius = 16.0;
+  static const _radiusSm = 12.0;
 
   static const int _preferredDateMinDaysAhead = 2;
   static const int _nonUrgentReminderGraceDays = 3;
@@ -74,6 +78,8 @@ class _ReportScreenState extends State<ReportScreen> {
   String reporterName = "";
   final ApiService api = ApiService();
   Timer? _verifyTimer;
+  Timer? _employeeIdCapsTimer;
+  bool _skipEmployeeIdCapsSchedule = false;
   bool isCheckingReporter = false;
   String? reporterError;
   bool equipmentNotListed = false;
@@ -98,7 +104,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   final List<PriorityOption> priorities = const [
     PriorityOption(
-      label: "Non Urgent",
+      label: "Non-Urgent",
       value: "Non-Urgent",
       description: "Minor issue or repair concern",
     ),
@@ -145,6 +151,18 @@ class _ReportScreenState extends State<ReportScreen> {
     if (!equipmentNotListed) return suggestedIssues;
     if (showAllGlobalIssues) return suggestedIssues;
     return suggestedIssues.take(5).toList();
+  }
+
+  String formatRoomLocationLabel(dynamic room) {
+    final map = room is Map ? Map<String, dynamic>.from(room) : <String, dynamic>{};
+    final location = (map["location"]?.toString() ?? "").trim();
+    final count = int.tryParse(map["equipment_count"]?.toString() ?? "") ?? 0;
+    if (location.isEmpty) return "Eq. $count";
+    // Avoid duplicating if API already appended a count.
+    if (RegExp(r'(Eq\.\s*\d+|\s-\s\d+\s*$)').hasMatch(location)) {
+      return location;
+    }
+    return "$location - Eq. $count";
   }
 
   String formatEquipmentLabel(dynamic item) {
@@ -230,6 +248,7 @@ class _ReportScreenState extends State<ReportScreen> {
       add("Entry type", "Manual entry");
     } else {
       add("Name", map["equipment_name"] ?? displayLabel);
+      add("Category", map["equipment_category_name"] ?? map["category"]);
       add("Asset tag", map["equipment_asset_tag"]);
       add("Serial number", map["equipment_serial_number"]);
       add("Brand", map["equipment_brand_name"]);
@@ -388,7 +407,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   child: FilledButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
                     style: FilledButton.styleFrom(
-                      backgroundColor: _ink,
+                      backgroundColor: _blue,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shadowColor: Colors.transparent,
@@ -421,190 +440,271 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final isNonUrgent = priority == "Non-Urgent";
+    final topInset = MediaQuery.of(context).padding.top;
 
-    return Scaffold(
-      backgroundColor: _page,
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: _page,
-        foregroundColor: _ink,
-        surfaceTintColor: Colors.transparent,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: ColoredBox(
-            color: _border,
-            child: SizedBox(height: 1, width: double.infinity),
-          ),
-        ),
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: Center(
-            child: Material(
-              color: _page,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(_radius),
-                side: const BorderSide(color: _border),
-              ),
-              elevation: 0,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(_radius),
-                onTap: () => Navigator.maybePop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.arrow_back_rounded, size: 20, color: _ink),
-                ),
-              ),
-            ),
-          ),
-        ),
-        titleSpacing: 8,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Report an issue",
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 22,
-                letterSpacing: -0.6,
-                color: _ink,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              "Broken or faulty campus equipment",
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                color: _muted,
-              ),
-            ),
-          ],
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark, // Android: dark icons on white
+        statusBarBrightness: Brightness.light, // iOS: dark icons on white
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
+      child: Scaffold(
+      backgroundColor: _page,
       body: SingleChildScrollView(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+        padding: EdgeInsets.fromLTRB(20, topInset + 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: const Text(
-                "CAMPUS REPORT",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: Color(0xFF92400E),
+            // ── Header (web modal mobile) ──
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _amber,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _amber.withValues(alpha: 0.28),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              "Maintenance Report",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-                color: _ink,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              "Report room, facility, or equipment concerns.",
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-                color: _muted,
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            // Employee ID
-            _buildSectionTitle("Employee ID"),
-            const SizedBox(height: 10),
-            KeyedSubtree(
-              key: employeeKey,
-              child: _softCard(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                child: TextField(
-                  controller: employeeIdController,
-                  decoration: _minimalInputDecoration(
-                    hintText: "Enter employee ID",
-                    errorText: employeeIdError,
-                    prefixIcon: const Icon(Icons.qr_code_scanner_rounded),
-                    contentPadding: const EdgeInsets.fromLTRB(8, 14, 16, 14),
+                child: const Text(
+                  "CAMPUS REPORT",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: _ink,
                   ),
-                  onChanged: (_) {
-                    setState(() {
-                      employeeIdError = null;
-                      reporterError = null;
-                    });
-                    _verifyTimer?.cancel();
-                    _verifyTimer = Timer(
-                      const Duration(milliseconds: 600),
-                      verifyReporter,
-                    );
-                    if (employeeIdController.text.trim().isEmpty) {
-                      setState(() {
-                        reporterVerified = false;
-                        reporterName = "";
-                        reporterError = null;
-                        isCheckingReporter = false;
-                      });
-                    } else {
-                      setState(() => isCheckingReporter = true);
-                    }
-                  },
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _statusDot(),
-                const SizedBox(width: 8),
-                Expanded(child: _reporterStatusText()),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _blue,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _blue.withValues(alpha: 0.22),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.edit_note_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Maintenance Report",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          height: 1.15,
+                          color: _ink,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        "Report room, facility, or equipment concerns.",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _muted,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Material(
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFFE8ECF4)),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => Navigator.maybePop(context),
+                    child: const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
-
             const SizedBox(height: 22),
 
-            // Location & equipment draft
+            // ── Employee ID ──
+            _buildSectionTitle("Employee ID"),
+            const SizedBox(height: 8),
+            KeyedSubtree(
+              key: employeeKey,
+              child: TextField(
+                controller: employeeIdController,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: _ink,
+                ),
+                decoration: _fieldDecoration(
+                  hintText: "EMPLOYEE ID",
+                  errorText: employeeIdError,
+                  prefixIcon: const Icon(
+                    Icons.face_retouching_natural_rounded,
+                    color: _blue,
+                    size: 22,
+                  ),
+                ),
+                onChanged: (_) {
+                  setState(() {
+                    employeeIdError = null;
+                    reporterError = null;
+                  });
+
+                  // After 3s idle, normalize to uppercase (OMC0129F) without fighting typing.
+                  if (!_skipEmployeeIdCapsSchedule) {
+                    _employeeIdCapsTimer?.cancel();
+                    _employeeIdCapsTimer = Timer(
+                      const Duration(seconds: 3),
+                      _uppercaseEmployeeIdIfNeeded,
+                    );
+                  }
+
+                  _verifyTimer?.cancel();
+                  _verifyTimer = Timer(
+                    const Duration(milliseconds: 600),
+                    verifyReporter,
+                  );
+                  if (employeeIdController.text.trim().isEmpty) {
+                    setState(() {
+                      reporterVerified = false;
+                      reporterName = "";
+                      reporterError = null;
+                      isCheckingReporter = false;
+                    });
+                  } else {
+                    setState(() => isCheckingReporter = true);
+                  }
+                },
+              ),
+            ),
+            if (reporterVerified && reporterName.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: _blueSoft,
+                  borderRadius: BorderRadius.circular(_radiusSm),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "REPORTER VERIFIED",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: _blue,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 18,
+                          color: Color(0xFF22C55E),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            reporterName,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF3C3C3F),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _statusDot(),
+                  const SizedBox(width: 8),
+                  Expanded(child: _reporterStatusText()),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 20),
+
+            // ── Location & equipment ──
             _buildSectionTitle("Location & equipment"),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             KeyedSubtree(
               key: locationKey,
-              child: _softCard(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_radius),
+                  border: Border.all(color: _border),
+                ),
                 child: Column(
                   children: [
                     _selectRow(
-                      icon: Icons.location_on_rounded,
-                      iconColor: _blue,
+                      icon: Icons.location_on_outlined,
                       value: selectedLocation,
-                      placeholder: "Select location",
+                      placeholder: "Select Location",
                       errorText: locationError,
                       onTap: () {
-                        showSelectionBottomSheet(
-                          title: "Select Location",
+                        showSelectionPicker(
+                          title: "Select location",
+                          searchHint: "Search rooms",
                           items: rooms,
                           selectedItem: selectedRoomId,
-                          icon: Icons.location_on_outlined,
-                          label: (room) => room["location"]?.toString() ?? "",
+                          label: formatRoomLocationLabel,
                           idOf: (room) =>
                               int.tryParse(room["room_id"]?.toString() ?? ""),
                           onSelected: (room) {
                             locationError = null;
                             setState(() {
-                              selectedLocation = room["location"]?.toString();
+                              selectedLocation = formatRoomLocationLabel(room);
                               selectedRoomId = int.tryParse(
                                 room["room_id"]?.toString() ?? "",
                               );
@@ -625,25 +725,24 @@ class _ReportScreenState extends State<ReportScreen> {
                         );
                       },
                     ),
-                    _rowDivider(),
+                    const Divider(height: 1, thickness: 1, color: _border),
                     KeyedSubtree(
                       key: equipmentKey,
                       child: equipmentNotListed
                           ? _textInputRow(
-                              icon: Icons.devices_other_rounded,
-                              iconColor: _blue,
+                              icon: Icons.keyboard_alt_outlined,
                               controller: equipmentController,
-                              hint: "Enter equipment name",
+                              hint: "Enter equipment name manually...",
+                              hintLabel: "Type equipment name",
                               errorText: equipmentError,
                               onChanged: (_) {
                                 setState(() => equipmentError = null);
                               },
                             )
                           : _selectRow(
-                              icon: Icons.devices_other_rounded,
-                              iconColor: _blue,
+                              icon: Icons.monitor_outlined,
                               value: selectedEquipmentLabel,
-                              placeholder: "Select equipment",
+                              placeholder: "Select Equipment",
                               errorText: equipmentError,
                               onTap: () {
                                 if (selectedRoomId == null) {
@@ -654,14 +753,15 @@ class _ReportScreenState extends State<ReportScreen> {
                                   scrollToField(locationKey);
                                   return;
                                 }
-                                showSelectionBottomSheet(
-                                  title: "Select Equipment",
+                                showSelectionPicker(
+                                  title: "Select equipment",
+                                  searchHint: "Search equipment",
                                   items: _availableEquipment,
                                   selectedItem: selectedEquipmentId,
-                                  icon: Icons.computer_rounded,
                                   label: formatEquipmentLabel,
                                   idOf: _equipmentIdOf,
                                   enableLongPressDetails: true,
+                                  enableCategoryFilter: true,
                                   onSelected: (item) {
                                     equipmentError = null;
                                     final id = _equipmentIdOf(item);
@@ -689,11 +789,16 @@ class _ReportScreenState extends State<ReportScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _softCard(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: SwitchListTile(
-                      value: equipmentNotListed,
-                      onChanged: (value) async {
+                  child: Material(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: _border),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () async {
+                        final value = !equipmentNotListed;
                         setState(() {
                           equipmentNotListed = value;
                           selectedEquipmentLabel = null;
@@ -711,40 +816,80 @@ class _ReportScreenState extends State<ReportScreen> {
                           setState(() => suggestedIssues.clear());
                         }
                       },
-                      activeThumbColor: Colors.white,
-                      activeTrackColor: _ink,
-                      title: const Text(
-                        "Equipment not listed",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: _ink,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                "Equipment not listed",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  color: _ink,
+                                ),
+                              ),
+                            ),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              width: 40,
+                              height: 24,
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: equipmentNotListed ? _blue : _border,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              alignment: equipmentNotListed
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      blurRadius: 3,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 8),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
-                  height: 56,
-                  child: FilledButton.icon(
+                  height: 48,
+                  child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: _blue,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shadowColor: Colors.transparent,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_radius),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
                     ),
                     onPressed: addEquipmentItem,
-                    icon: const Icon(Icons.add_rounded, size: 20),
-                    label: const Text(
+                    child: const Text(
                       "Add",
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -752,203 +897,203 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
 
             const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: _soft,
+                borderRadius: BorderRadius.circular(_radiusSm),
+              ),
+              child: Text(
+                itemsError ??
+                    "Select equipment, then choose a suggested issue or fill Additional Details, then click Add. Labels include asset tag/serial so identical names stay distinguishable.",
+                style: TextStyle(
+                  color: itemsError != null
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF6B7280),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  height: 1.45,
+                ),
+              ),
+            ),
             KeyedSubtree(
               key: itemsKey,
               child: selectedItems.isEmpty
-                  ? _softCard(
-                      padding: const EdgeInsets.all(18),
-                      child: Text(
-                        itemsError ??
-                            "Select equipment, then choose a suggested issue or fill Additional Details, then tap Add.",
-                        style: TextStyle(
-                          color: itemsError != null
-                              ? const Color(0xFFEF4444)
-                              : _muted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          height: 1.4,
-                        ),
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        ...selectedItems.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final item = entry.value;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(_radius),
-                                onLongPress: () {
-                                  showEquipmentDetailsDialog(
-                                    title: "Equipment details",
-                                    details: item.details,
-                                    displayLabel: item.displayLabel,
-                                    issue: item.issue,
-                                    manualName: item.manualName,
-                                    isManual:
-                                        item.type == _EquipmentItemType.manual,
-                                  );
-                                },
-                                child: _softCard(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    14,
-                                    12,
-                                    10,
-                                    12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              item.displayLabel,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                                color: _ink,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              "Issue: ${item.issue}",
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w500,
-                                                color: _muted,
-                                              ),
-                                            ),
-                                            if ((item.openReportTicket ?? "")
-                                                .isNotEmpty) ...[
-                                              const SizedBox(height: 4),
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Column(
+                        children: [
+                          ...selectedItems.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final item = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius:
+                                      BorderRadius.circular(_radiusSm),
+                                  onLongPress: () {
+                                    showEquipmentDetailsDialog(
+                                      title: "Equipment details",
+                                      details: item.details,
+                                      displayLabel: item.displayLabel,
+                                      issue: item.issue,
+                                      manualName: item.manualName,
+                                      isManual: item.type ==
+                                          _EquipmentItemType.manual,
+                                    );
+                                  },
+                                  child: _softCard(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      14,
+                                      12,
+                                      10,
+                                      12,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
                                               Text(
-                                                "Open report ${item.openReportTicket} — submit will add your update there.",
+                                                item.displayLabel,
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFFB45309),
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: _ink,
                                                 ),
                                               ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                "Issue: ${item.issue}",
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: _muted,
+                                                ),
+                                              ),
+                                              if ((item.openReportTicket ?? "")
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  "Open report ${item.openReportTicket} — submit will add your update there.",
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFFB45309),
+                                                  ),
+                                                ),
+                                              ],
                                             ],
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              item.type ==
-                                                      _EquipmentItemType.manual
-                                                  ? "MANUAL ENTRY · HOLD FOR DETAILS"
-                                                  : "LISTED EQUIPMENT · HOLD FOR DETAILS",
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                letterSpacing: 0.4,
-                                                color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              selectedItems.removeAt(index);
+                                              itemsError = null;
+                                            });
+                                          },
+                                          style: TextButton.styleFrom(
+                                            foregroundColor:
+                                                const Color(0xFFDC2626),
+                                            backgroundColor:
+                                                const Color(0xFFFEF2F2),
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              side: const BorderSide(
+                                                color: Color(0xFFFECACA),
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            selectedItems.removeAt(index);
-                                            itemsError = null;
-                                          });
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor:
-                                              const Color(0xFFDC2626),
-                                          backgroundColor:
-                                              const Color(0xFFFEF2F2),
-                                          elevation: 0,
-                                          shadowColor: Colors.transparent,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
                                           ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            side: const BorderSide(
-                                              color: Color(0xFFFECACA),
+                                          child: const Text(
+                                            "Remove",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ),
-                                        child: const Text(
-                                          "Remove",
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        }),
-                        if (itemsError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              itemsError!,
-                              style: const TextStyle(
-                                color: Color(0xFFEF4444),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                            );
+                          }),
+                          if (itemsError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                itemsError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFEF4444),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
             ),
 
-            const SizedBox(height: 22),
+            const SizedBox(height: 18),
 
-            // Suggested issues (chips)
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSectionTitle(
-                    "Suggested issues (${suggestedIssues.length})",
-                  ),
-                ),
-              ],
+            // ── Suggested issues ──
+            _buildSectionTitle(
+              "Suggested issues (${suggestedIssues.length})",
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             KeyedSubtree(
               key: issueKey,
-              child: suggestedIssues.isEmpty
-                  ? _softCard(
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 112),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_radiusSm),
+                  border: Border.all(color: _border),
+                ),
+                child: suggestedIssues.isEmpty
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.info_outline_rounded,
-                            color: Colors.grey.shade400,
-                            size: 28,
+                            color: _placeholder,
+                            size: 20,
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Text(
                             equipmentNotListed
-                                ? "Enable Equipment not listed to load global suggested issues."
+                                ? "Loading global suggested issues..."
                                 : "Select equipment first to see suggested issues.",
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: Color(0xFF9CA3AF),
+                              color: _placeholder,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
+                              height: 1.4,
                             ),
                           ),
                           if (issueError != null) ...[
@@ -964,522 +1109,553 @@ class _ReportScreenState extends State<ReportScreen> {
                             ),
                           ],
                         ],
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: visibleSuggestedIssues.map((issue) {
-                            final id = int.tryParse(
-                              issue["issue_template_id"]?.toString() ?? "",
-                            );
-                            final name =
-                                issue["issue_template_name"]?.toString() ?? "";
-                            final selected = selectedSuggestedIssueId == id;
-                            return ChoiceChip(
-                              label: Text(name),
-                              selected: selected,
-                              onSelected: (_) {
-                                setState(() {
-                                  if (selected) {
-                                    selectedSuggestedIssueId = null;
-                                    selectedSuggestedIssueName = null;
-                                  } else {
-                                    selectedSuggestedIssueId = id;
-                                    selectedSuggestedIssueName = name;
-                                    issueError = null;
-                                    descriptionError = null;
-                                  }
-                                });
-                              },
-                              selectedColor: _amber,
-                              backgroundColor: Colors.white,
-                              elevation: 0,
-                              pressElevation: 0,
-                              shadowColor: Colors.transparent,
-                              labelStyle: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                                color: selected ? _ink : const Color(0xFF334155),
-                              ),
-                              side: BorderSide(
-                                color: selected
-                                    ? _amber
-                                    : _border,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              showCheckmark: false,
-                            );
-                          }).toList(),
-                        ),
-                        if (equipmentNotListed &&
-                            !showAllGlobalIssues &&
-                            suggestedIssues.length > 5)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: TextButton(
-                              onPressed: () {
-                                showSelectionBottomSheet(
-                                  title: "Select Suggested Issue",
-                                  items: suggestedIssues,
-                                  selectedItem: selectedSuggestedIssueId,
-                                  icon: Icons.report_problem_outlined,
-                                  label: (issue) =>
-                                      issue["issue_template_name"]?.toString() ??
-                                      "",
-                                  idOf: (issue) => int.tryParse(
-                                    issue["issue_template_id"]?.toString() ??
-                                        "",
-                                  ),
-                                  onSelected: (issue) {
-                                    setState(() {
-                                      selectedSuggestedIssueId = int.tryParse(
-                                        issue["issue_template_id"]?.toString() ??
-                                            "",
-                                      );
-                                      selectedSuggestedIssueName =
-                                          issue["issue_template_name"]
-                                              ?.toString();
-                                      issueError = null;
-                                      descriptionError = null;
-                                    });
-                                  },
-                                );
-                              },
-                              child: Text(
-                                "+${suggestedIssues.length - 5} more issues",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (issueError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              issueError!,
-                              style: const TextStyle(
-                                color: Color(0xFFEF4444),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-            ),
-
-            const SizedBox(height: 22),
-
-            // Additional details (used at Add time)
-            _buildSectionTitle("Additional details"),
-            const SizedBox(height: 6),
-            const Text(
-              "Optional if a suggested issue is selected",
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                color: _muted,
-              ),
-            ),
-            const SizedBox(height: 10),
-            KeyedSubtree(
-              key: descriptionKey,
-              child: _softCard(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                child: TextField(
-                  controller: descriptionController,
-                  maxLines: 4,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                    color: _ink,
-                  ),
-                  decoration: _minimalInputDecoration(
-                    hintText: "Describe the problem...",
-                    errorText: descriptionError,
-                    contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  ),
-                  onChanged: (_) {
-                    if (descriptionController.text.trim().isNotEmpty) {
-                      setState(() {
-                        descriptionError = null;
-                        issueError = null;
-                      });
-                    }
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 22),
-
-            // Priority panel (web-style dark block)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-              decoration: BoxDecoration(
-                color: _panel,
-                borderRadius: BorderRadius.circular(_radius),
-                border: Border.all(color: const Color(0xFF1E293B)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Priority level",
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...priorities.map((item) {
-                    final selected = priority == item.value;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Material(
-                        color: selected
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(_radius),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(_radius),
-                          onTap: () {
-                            setState(() {
-                              priority = item.value;
-                              if (item.value == "Urgent") {
-                                preferredActionDate = null;
-                                preferredDateError = null;
-                              }
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
                             child: Row(
-                              children: [
-                                Icon(
-                                  selected
-                                      ? Icons.radio_button_checked
-                                      : Icons.radio_button_off,
-                                  color: selected ? _amber : Colors.white70,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.label,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14.5,
-                                          color: selected
-                                              ? Colors.white
-                                              : Colors.white.withValues(
-                                                  alpha: 0.9,
-                                                ),
-                                        ),
+                              children: visibleSuggestedIssues.map((issue) {
+                                final id = int.tryParse(
+                                  issue["issue_template_id"]?.toString() ??
+                                      "",
+                                );
+                                final name = issue["issue_template_name"]
+                                        ?.toString() ??
+                                    "";
+                                final selected =
+                                    selectedSuggestedIssueId == id;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Material(
+                                    color: selected
+                                        ? _amber
+                                        : _blueSoft,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                      side: BorderSide(
+                                        color: selected
+                                            ? Colors.transparent
+                                            : const Color(0xFFE0E7FF),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        item.description,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.55,
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(999),
+                                      onTap: () {
+                                        setState(() {
+                                          if (selected) {
+                                            selectedSuggestedIssueId = null;
+                                            selectedSuggestedIssueName = null;
+                                          } else {
+                                            selectedSuggestedIssueId = id;
+                                            selectedSuggestedIssueName = name;
+                                            issueError = null;
+                                            descriptionError = null;
+                                          }
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                          vertical: 10,
+                                        ),
+                                        child: Text(
+                                          name,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            color: selected
+                                                ? _ink
+                                                : _blue,
                                           ),
                                         ),
                                       ),
-                                    ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          if (equipmentNotListed &&
+                              !showAllGlobalIssues &&
+                              suggestedIssues.length > 5)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: TextButton(
+                                onPressed: () {
+                                  showSelectionPicker(
+                                    title: "Select suggested issue",
+                                    searchHint: "Search issues",
+                                    items: suggestedIssues,
+                                    selectedItem: selectedSuggestedIssueId,
+                                    label: (issue) =>
+                                        issue["issue_template_name"]
+                                            ?.toString() ??
+                                        "",
+                                    idOf: (issue) => int.tryParse(
+                                      issue["issue_template_id"]?.toString() ??
+                                          "",
+                                    ),
+                                    onSelected: (issue) {
+                                      setState(() {
+                                        selectedSuggestedIssueId =
+                                            int.tryParse(
+                                          issue["issue_template_id"]
+                                                  ?.toString() ??
+                                              "",
+                                        );
+                                        selectedSuggestedIssueName =
+                                            issue["issue_template_name"]
+                                                ?.toString();
+                                        issueError = null;
+                                        descriptionError = null;
+                                      });
+                                    },
+                                  );
+                                },
+                                child: Text(
+                                  "+${suggestedIssues.length - 5} more issues",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: _blue,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (issueError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                issueError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFEF4444),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Additional details ──
+            _buildSectionTitle("Additional details"),
+            const SizedBox(height: 4),
+            const Text(
+              "Optional if a suggested issue is selected",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _placeholder,
+              ),
+            ),
+            const SizedBox(height: 8),
+            KeyedSubtree(
+              key: descriptionKey,
+              child: TextField(
+                controller: descriptionController,
+                maxLines: 5,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                  color: _ink,
+                ),
+                decoration: _fieldDecoration(
+                  hintText: "Describe the problem...",
+                  errorText: descriptionError,
+                  contentPadding: const EdgeInsets.fromLTRB(14, 14, 40, 14),
+                ),
+                onChanged: (_) {
+                  if (descriptionController.text.trim().isNotEmpty) {
+                    setState(() {
+                      descriptionError = null;
+                      issueError = null;
+                    });
+                  }
+                },
+              ),
+            ),
+
+            const SizedBox(height: 22),
+
+            // ── Priority level (light cards) ──
+            _buildSectionTitle("Priority level"),
+            const SizedBox(height: 10),
+            ...priorities.map((item) {
+              final selected = priority == item.value;
+              final isUrgent = item.value == "Urgent";
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Material(
+                  color: selected
+                      ? (isUrgent
+                          ? const Color(0xFFFEF2F2)
+                          : _blueSoft)
+                      : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(
+                      color: selected
+                          ? (isUrgent
+                              ? const Color(0xFFEF4444)
+                              : _blue)
+                          : const Color(0xFFE8ECF4),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () {
+                      setState(() {
+                        priority = item.value;
+                        // Keep preferred date when switching Urgent ↔ Non-Urgent
+                        // (matches web). Urgent simply hides the field.
+                        if (item.value == "Urgent") {
+                          preferredDateError = null;
+                        }
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: selected
+                                    ? (isUrgent
+                                        ? const Color(0xFFEF4444)
+                                        : const Color(0xFF34D399))
+                                    : const Color(0xFFCBD5E1),
+                                width: 2,
+                              ),
+                              color: Colors.white,
+                            ),
+                            child: selected
+                                ? Center(
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isUrgent
+                                            ? const Color(0xFFEF4444)
+                                            : const Color(0xFF34D399),
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                    color: selected
+                                        ? (isUrgent
+                                            ? const Color(0xFFDC2626)
+                                            : _blue)
+                                        : _ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.description,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: _muted,
+                                    height: 1.35,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    );
-                  }),
-                  if (isNonUrgent) ...[
+                    ),
+                  ),
+                ),
+              );
+            }),
+
+            if (isNonUrgent) ...[
+              const SizedBox(height: 8),
+              KeyedSubtree(
+                key: preferredDateKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _buildSectionTitle("Preferred date"),
+                        const Spacer(),
+                        const Text(
+                          "Optional",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    KeyedSubtree(
-                      key: preferredDateKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                    Material(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_radius),
+                        side: const BorderSide(color: _borderSoft),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(_radius),
+                        onTap: pickPreferredDate,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
+                          child: Row(
                             children: [
-                              const Text(
-                                "Preferred date",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                              Expanded(
+                                child: Text(
+                                  preferredActionDate == null
+                                      ? ""
+                                      : DateFormat("dd/MM/yyyy")
+                                          .format(preferredActionDate!),
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: preferredActionDate == null
+                                        ? _placeholder
+                                        : _ink,
+                                  ),
                                 ),
                               ),
-                              const Spacer(),
-                              Text(
-                                "Optional",
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withValues(alpha: 0.5),
+                              if (preferredActionDate != null)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      preferredActionDate = null;
+                                      preferredDateError = null;
+                                    });
+                                  },
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                    color: _muted,
+                                  ),
+                                )
+                              else
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: Color(0xFF8892A4),
                                 ),
-                              ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Material(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(_radius),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Optional. Earliest date is $_preferredDateMinDaysAhead days from today. If you skip this, maintenance will be reminded after $_nonUrgentReminderGraceDays days.",
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        height: 1.45,
+                        color: Color(0xFF9AA1B5),
+                      ),
+                    ),
+                    if (preferredDateError != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        preferredDateError!,
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+
+            // ── Upload proof ──
+            _buildSectionTitle("Upload proof image"),
+            const SizedBox(height: 10),
+            selectedImage == null
+                ? GestureDetector(
+                    onTap: pickImage,
+                    child: CustomPaint(
+                      painter: _DashedBorderPainter(
+                        color: const Color(0xFFC8D4F5),
+                        radius: 20,
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: 120),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 22,
+                        ),
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: Color(0xFF2947F0),
+                              size: 28,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              "Click to upload photo",
+                              style: TextStyle(
+                                color: Color(0xFF334155),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "(Optional)",
+                              style: TextStyle(
+                                color: Color(0xFFA7AAB9),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              "PNG, JPG, JPEG, WEBP up to 10MB",
+                              style: TextStyle(
+                                color: Color(0xFF9AA1B5),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : SizedBox(
+                    height: 140,
+                    width: double.infinity,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Material(
+                            color: _blueSoft,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: const BorderSide(
+                                color: _blue,
+                                width: 1.5,
+                              ),
+                            ),
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(_radius),
-                              onTap: pickPreferredDate,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14,
-                                ),
-                                child: Row(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () =>
+                                  showProofImageFullscreen(selectedImage!),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Stack(
+                                  fit: StackFit.expand,
                                   children: [
-                                    Icon(
-                                      Icons.calendar_today_rounded,
-                                      size: 18,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.75,
-                                      ),
+                                    Image.file(
+                                      selectedImage!,
+                                      fit: BoxFit.cover,
                                     ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        preferredActionDate == null
-                                            ? "dd/mm/yyyy"
-                                            : DateFormat("dd/MM/yyyy")
-                                                .format(preferredActionDate!),
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: preferredActionDate == null
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.45,
-                                                )
-                                              : Colors.white,
+                                    Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 6,
                                         ),
-                                      ),
-                                    ),
-                                    if (preferredActionDate != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () {
-                                          setState(() {
-                                            preferredActionDate = null;
-                                            preferredDateError = null;
-                                          });
-                                        },
-                                        icon: Icon(
-                                          Icons.close_rounded,
-                                          size: 18,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
+                                        color: Colors.black
+                                            .withValues(alpha: 0.45),
+                                        child: const Text(
+                                          "Tap to view full screen",
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Optional. Earliest date is $_preferredDateMinDaysAhead days from today. If you skip this, maintenance will be reminded after $_nonUrgentReminderGraceDays days.",
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              height: 1.35,
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                          ),
-                          if (preferredDateError != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              preferredDateError!,
-                              style: const TextStyle(
-                                color: Color(0xFFFCA5A5),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                        ),
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Material(
+                            color: const Color(0x26EF4444),
+                            shape: const CircleBorder(
+                              side: BorderSide(
+                                color: Color(0x4DEF4444),
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Upload proof image",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  selectedImage == null
-                      ? GestureDetector(
-                          onTap: pickImage,
-                          child: Container(
-                            height: 120,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(_radius),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.2),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => setState(() => selectedImage = null),
+                              child: const Padding(
+                                padding: EdgeInsets.all(7),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 16,
+                                  color: Color(0xFFEF4444),
+                                ),
                               ),
-                              color: Colors.white.withValues(alpha: 0.05),
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.cloud_upload_outlined,
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Tap to upload photo (Optional)",
-                                  style: TextStyle(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.75),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "PNG · JPG · JPEG · WEBP",
-                                  style: TextStyle(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.4),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : SizedBox(
-                          height: 120,
-                          width: double.infinity,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(_radius),
-                                    onTap: () => showProofImageFullscreen(
-                                      selectedImage!,
-                                    ),
-                                    child: Ink(
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                            BorderRadius.circular(_radius),
-                                        border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.2),
-                                        ),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(_radius),
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            Image.file(
-                                              selectedImage!,
-                                              fit: BoxFit.cover,
-                                            ),
-                                            Align(
-                                              alignment: Alignment.bottomCenter,
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  vertical: 6,
-                                                ),
-                                                color: Colors.black
-                                                    .withValues(alpha: 0.45),
-                                                child: const Text(
-                                                  "Tap to view full screen",
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11.5,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Material(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  shape: const CircleBorder(),
-                                  child: InkWell(
-                                    customBorder: const CircleBorder(),
-                                    onTap: pickImage,
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(8),
-                                      child: Icon(
-                                        Icons.edit_rounded,
-                                        size: 16,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
-                ],
-              ),
-            ),
+                      ],
+                    ),
+                  ),
 
             const SizedBox(height: 28),
 
             SizedBox(
               width: double.infinity,
-              height: 56,
+              height: 52,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: _blue,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shadowColor: Colors.transparent,
+                  shadowColor: _blue.withValues(alpha: 0.18),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(_radius),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 onPressed: () async {
@@ -1493,7 +1669,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 15.5,
-                    letterSpacing: -0.1,
                   ),
                 ),
               ),
@@ -1506,7 +1681,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   "Cancel",
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: _muted,
+                    color: Color(0xFF6B7280),
                   ),
                 ),
               ),
@@ -1514,12 +1689,14 @@ class _ReportScreenState extends State<ReportScreen> {
           ],
         ),
       ),
+      ),
     );
   }
 
   @override
   void dispose() {
     _verifyTimer?.cancel();
+    _employeeIdCapsTimer?.cancel();
     employeeIdController.dispose();
     descriptionController.dispose();
     equipmentController.dispose();
@@ -1528,6 +1705,33 @@ class _ReportScreenState extends State<ReportScreen> {
     _locationSearchTimer?.cancel();
     _equipmentSearchTimer?.cancel();
     super.dispose();
+  }
+
+  /// Matches web: after 3s idle, normalize Employee ID to uppercase (e.g. OMC0129F).
+  void _uppercaseEmployeeIdIfNeeded() {
+    if (!mounted) return;
+    final current = employeeIdController.text;
+    final upper = current.toUpperCase();
+    if (current == upper) return;
+
+    final selection = employeeIdController.selection;
+    final pos = selection.isValid ? selection.baseOffset : upper.length;
+
+    _skipEmployeeIdCapsSchedule = true;
+    employeeIdController.value = TextEditingValue(
+      text: upper,
+      selection: TextSelection.collapsed(
+        offset: pos.clamp(0, upper.length),
+      ),
+    );
+    _skipEmployeeIdCapsSchedule = false;
+
+    // Re-verify with the normalized ID.
+    _verifyTimer?.cancel();
+    _verifyTimer = Timer(
+      const Duration(milliseconds: 100),
+      verifyReporter,
+    );
   }
 
   void addEquipmentItem() {
@@ -1658,7 +1862,7 @@ class _ReportScreenState extends State<ReportScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2563EB),
+              primary: _blue,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: _ink,
@@ -2060,7 +2264,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         height: 36,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          color: Color(0xFF2563EB),
+                          color: _blue,
                         ),
                       ),
                       SizedBox(height: 18),
@@ -2133,7 +2337,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           onPressed: () =>
                               Navigator.of(dialogContext).pop(true),
                           style: FilledButton.styleFrom(
-                            backgroundColor: _ink,
+                            backgroundColor: _blue,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -2210,7 +2414,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           onPressed: () =>
                               Navigator.of(dialogContext).pop(false),
                           style: FilledButton.styleFrom(
-                            backgroundColor: _ink,
+                            backgroundColor: _blue,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -2253,7 +2457,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                       child: const Icon(
                         Icons.send_rounded,
-                        color: Color(0xFF2563EB),
+                        color: _blue,
                         size: 24,
                       ),
                     ),
@@ -2304,7 +2508,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           child: FilledButton(
                             onPressed: sendReport,
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
+                              backgroundColor: _blue,
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
@@ -2419,6 +2623,8 @@ class _ReportScreenState extends State<ReportScreen> {
     employeeIdController.clear();
     descriptionController.clear();
     equipmentController.clear();
+    _employeeIdCapsTimer?.cancel();
+    _verifyTimer?.cancel();
 
     setState(() {
       reporterVerified = false;
@@ -2448,279 +2654,414 @@ class _ReportScreenState extends State<ReportScreen> {
     });
   }
 
-  Future<void> showSelectionBottomSheet({
+  String _equipmentCategoryNameOf(dynamic item) {
+    if (item is! Map) return "";
+    return (item["equipment_category_name"] ?? item["category"] ?? "")
+        .toString()
+        .trim();
+  }
+
+  String _equipmentCategoryIdOf(dynamic item) {
+    if (item is! Map) return "";
+    return (item["equipment_category_id"] ?? "").toString().trim();
+  }
+
+  /// Matches web short labels: AVE / CE / Furniture / full name.
+  String _equipmentCategoryShortLabel(String name) {
+    final n = name.trim().toLowerCase();
+    if (n.isEmpty) return "Other";
+    if (n.contains("audio") || n == "ave") return "AVE";
+    if (n.contains("computer") || n == "ce") return "CE";
+    if (n.contains("furniture")) return "Furniture";
+    return name.trim();
+  }
+
+  List<({String key, String label})> _collectEquipmentCategories(
+    List<dynamic> items,
+  ) {
+    final map = <String, String>{};
+    for (final item in items) {
+      final id = _equipmentCategoryIdOf(item);
+      final name = _equipmentCategoryNameOf(item);
+      if (id.isEmpty && name.isEmpty) continue;
+      final key = id.isNotEmpty ? id : name;
+      map.putIfAbsent(key, () => _equipmentCategoryShortLabel(name));
+    }
+    final list = map.entries
+        .map((e) => (key: e.key, label: e.value))
+        .toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
+    return list;
+  }
+
+  Future<void> showSelectionPicker({
     required String title,
     required List<dynamic> items,
     required String Function(dynamic) label,
     required Function(dynamic) onSelected,
-    required IconData icon,
     required dynamic selectedItem,
+    String searchHint = "Search",
     int? Function(dynamic)? idOf,
     bool enableLongPressDetails = false,
+    bool enableCategoryFilter = false,
   }) async {
     String search = "";
+    String categoryFilter = "";
     final searchController = TextEditingController();
     final searchFocus = FocusNode();
+    final categories =
+        enableCategoryFilter ? _collectEquipmentCategories(items) : const [];
+    final showCategoryChips = categories.length >= 2;
 
     void dismissKeyboard() {
       searchFocus.unfocus();
       FocusManager.instance.primaryFocus?.unfocus();
     }
 
-    await showModalBottomSheet(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
+      barrierColor: const Color(0xB30B1220),
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final filtered = items.where((item) {
+              if (categoryFilter.isNotEmpty) {
+                final catId = _equipmentCategoryIdOf(item);
+                final catName = _equipmentCategoryNameOf(item);
+                if (catId != categoryFilter && catName != categoryFilter) {
+                  return false;
+                }
+              }
               if (search.trim().isEmpty) return true;
-              return label(item)
-                  .toLowerCase()
-                  .contains(search.trim().toLowerCase());
+              final haystack = [
+                label(item),
+                _equipmentCategoryNameOf(item),
+                if (item is Map) ...[
+                  item["equipment_asset_tag"]?.toString() ?? "",
+                  item["equipment_serial_number"]?.toString() ?? "",
+                  item["equipment_brand_name"]?.toString() ?? "",
+                  item["equipment_model"]?.toString() ?? "",
+                ],
+              ].join(" ").toLowerCase();
+              return haystack.contains(search.trim().toLowerCase());
             }).toList();
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+            final media = MediaQuery.of(context);
+            final maxHeight = media.size.height * 0.78;
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 24,
               ),
-              child: DraggableScrollableSheet(
-                expand: false,
-                initialChildSize: 0.72,
-                minChildSize: 0.45,
-                maxChildSize: 0.92,
-                builder: (context, sheetController) {
-                  return Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 10),
-                        Container(
-                          width: 42,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE2E8F0),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: _ink,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 480,
+                  maxHeight: maxHeight.clamp(320.0, 640.0),
+                ),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 14, 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "CHOOSE AN OPTION",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.6,
+                                      color: _blue,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 18.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: _ink,
+                                    ),
+                                  ),
+                                  if (enableLongPressDetails) ...[
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      "Hold an item to see full details",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: _muted,
                                       ),
                                     ),
-                                    if (enableLongPressDetails) ...[
-                                      const SizedBox(height: 2),
-                                      const Text(
-                                        "Hold an item to see full details",
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: _muted,
-                                        ),
-                                      ),
-                                    ],
                                   ],
+                                ],
+                              ),
+                            ),
+                            Material(
+                              color: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: const BorderSide(
+                                  color: Color(0xFFE8ECF4),
                                 ),
                               ),
-                              IconButton(
-                                onPressed: () {
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
                                   dismissKeyboard();
-                                  Navigator.pop(context);
+                                  Navigator.pop(dialogContext);
                                 },
-                                icon: const Icon(Icons.close_rounded),
+                                child: const SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1, color: Color(0xFFE8ECF4)),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                        child: Container(
+                          height: 52,
+                          padding: const EdgeInsets.only(left: 16, right: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.search_rounded,
+                                color: _ink,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: searchController,
+                                  focusNode: searchFocus,
+                                  textInputAction: TextInputAction.search,
+                                  onChanged: (value) {
+                                    setModalState(() => search = value);
+                                  },
+                                  style: const TextStyle(
+                                    color: _ink,
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  decoration: InputDecoration(
+                                    isCollapsed: true,
+                                    border: InputBorder.none,
+                                    hintText: searchHint,
+                                    hintStyle: const TextStyle(
+                                      color: _placeholder,
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                width: 1,
+                                height: 22,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                color: const Color(0xFFEEF0F4),
+                              ),
+                              IconButton(
+                                tooltip: "Search",
+                                onPressed: () => setModalState(() {}),
+                                icon: const Icon(
+                                  Icons.tune_rounded,
+                                  color: _ink,
+                                  size: 22,
+                                ),
+                                visualDensity: VisualDensity.compact,
                               ),
                             ],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                          child: TextField(
-                            controller: searchController,
-                            focusNode: searchFocus,
-                            onChanged: (value) {
-                              setModalState(() => search = value);
-                            },
-                            decoration: InputDecoration(
-                              hintText: "Search...",
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              filled: true,
-                              fillColor: _soft,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(_radius),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(_radius),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(_radius),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF2563EB),
+                      ),
+                      if (showCategoryChips)
+                        SizedBox(
+                          height: 48,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                            children: [
+                              _categoryChip(
+                                label: "All",
+                                selected: categoryFilter.isEmpty,
+                                onTap: () => setModalState(
+                                  () => categoryFilter = "",
                                 ),
+                              ),
+                              ...categories.map(
+                                (cat) => Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: _categoryChip(
+                                    label: cat.label,
+                                    selected: categoryFilter == cat.key,
+                                    onTap: () => setModalState(
+                                      () => categoryFilter = cat.key,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(28),
+                                  child: Text(
+                                    items.isEmpty && enableLongPressDetails
+                                        ? "All equipment for this location is already added."
+                                        : categoryFilter.isNotEmpty
+                                            ? "No equipment in this category."
+                                            : "No matches. Try another search.",
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: _muted,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  8,
+                                  10,
+                                  8,
+                                ),
+                                itemCount: filtered.length,
+                                itemBuilder: (_, index) {
+                                  final item = filtered[index];
+                                  final itemId = idOf?.call(item) ??
+                                      (item is Map
+                                          ? item.values.first
+                                          : null);
+                                  final selected = selectedItem != null &&
+                                      selectedItem == itemId;
+                                  final openReportTicket =
+                                      _openReportTicketOf(item);
+                                  final text = label(item);
+
+                                  return Material(
+                                    color: selected
+                                        ? _blueSoft
+                                        : openReportTicket != null
+                                            ? const Color(0xFFFFFBEB)
+                                            : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: () {
+                                        dismissKeyboard();
+                                        onSelected(item);
+                                        Navigator.pop(dialogContext);
+                                      },
+                                      onLongPress: enableLongPressDetails
+                                          ? () {
+                                              dismissKeyboard();
+                                              showEquipmentDetailsDialog(
+                                                title: "Equipment details",
+                                                details:
+                                                    _detailsFromEquipment(item),
+                                                displayLabel: text,
+                                              );
+                                            }
+                                          : null,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 14,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              text,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                                color: selected ? _blue : _ink,
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                            if (openReportTicket != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                "Open report: $openReportTicket",
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFFB45309),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 10, 18, 22),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: FilledButton(
+                            onPressed: () {
+                              dismissKeyboard();
+                              Navigator.pop(dialogContext);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _blue,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            child: const Text(
+                              "Done",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
                               ),
                             ),
                           ),
                         ),
-                        Expanded(
-                          child: filtered.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    items.isEmpty && enableLongPressDetails
-                                        ? "All equipment for this location is already added."
-                                        : "No results found",
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: _muted,
-                                    ),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  controller: sheetController,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    4,
-                                    16,
-                                    24,
-                                  ),
-                                  itemCount: filtered.length,
-                                  itemBuilder: (_, index) {
-                                    final item = filtered[index];
-                                    final itemId = idOf?.call(item) ??
-                                        (item is Map
-                                            ? item.values.first
-                                            : null);
-                                    final selected = selectedItem != null &&
-                                        selectedItem == itemId;
-                                    final openReportTicket =
-                                        _openReportTicketOf(item);
-
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: Material(
-                                        color: selected
-                                            ? const Color(0xFFEFF6FF)
-                                            : openReportTicket != null
-                                                ? const Color(0xFFFFFBEB)
-                                                : Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(_radius),
-                                          side: BorderSide(
-                                            color: selected
-                                                ? const Color(0xFF2563EB)
-                                                : openReportTicket != null
-                                                    ? const Color(0xFFFCD34D)
-                                                    : _border,
-                                          ),
-                                        ),
-                                        child: InkWell(
-                                          borderRadius:
-                                              BorderRadius.circular(_radius),
-                                          onTap: () {
-                                            dismissKeyboard();
-                                            onSelected(item);
-                                            Navigator.pop(context);
-                                          },
-                                          onLongPress: enableLongPressDetails
-                                              ? () {
-                                                  dismissKeyboard();
-                                                  showEquipmentDetailsDialog(
-                                                    title: "Equipment details",
-                                                    details:
-                                                        _detailsFromEquipment(
-                                                      item,
-                                                    ),
-                                                    displayLabel: label(item),
-                                                  );
-                                                }
-                                              : null,
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 12,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 40,
-                                                  height: 40,
-                                                  decoration: BoxDecoration(
-                                                    color: _soft,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      6,
-                                                    ),
-                                                    border: Border.all(
-                                                      color: _border,
-                                                    ),
-                                                  ),
-                                                  child: Icon(
-                                                    icon,
-                                                    color: selected
-                                                        ? const Color(
-                                                            0xFF2563EB,
-                                                          )
-                                                        : _ink,
-                                                    size: 20,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Text(
-                                                    label(item),
-                                                    maxLines: 3,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 14.5,
-                                                      color: _ink,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Icon(
-                                                  selected
-                                                      ? Icons
-                                                          .check_circle_rounded
-                                                      : Icons
-                                                          .chevron_right_rounded,
-                                                  color: selected
-                                                      ? _blue
-                                                      : const Color(0xFFCBD5E1),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
@@ -2732,6 +3073,37 @@ class _ReportScreenState extends State<ReportScreen> {
     searchFocus.dispose();
   }
 
+  Widget _categoryChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: selected ? const Color(0xFFEEF2FF) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: BorderSide(
+          color: selected ? _blue : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: selected ? _blue : const Color(0xFF475569),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _sheetActionTile({
     required IconData icon,
     required String title,
@@ -2740,10 +3112,10 @@ class _ReportScreenState extends State<ReportScreen> {
   }) {
     return Material(
       color: _soft,
-      borderRadius: BorderRadius.circular(_radius),
+      borderRadius: BorderRadius.circular(_radiusSm),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(_radius),
+        borderRadius: BorderRadius.circular(_radiusSm),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
@@ -2753,7 +3125,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _border),
                 ),
                 child: Icon(icon, color: _blue, size: 22),
@@ -2795,10 +3167,11 @@ class _ReportScreenState extends State<ReportScreen> {
     return Text(
       title,
       style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.3,
-        color: _ink,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0,
+        color: Color(0xFF0F172A),
+        height: 1.25,
       ),
     );
   }
@@ -2812,27 +3185,15 @@ class _ReportScreenState extends State<ReportScreen> {
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(_radius),
+        borderRadius: BorderRadius.circular(_radiusSm),
         border: Border.all(color: _border),
       ),
       child: child,
     );
   }
 
-  Widget _rowDivider() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: Color(0xFFE5E7EB),
-      ),
-    );
-  }
-
   Widget _selectRow({
     required IconData icon,
-    required Color iconColor,
     required String placeholder,
     String? value,
     String? errorText,
@@ -2846,23 +3207,21 @@ class _ReportScreenState extends State<ReportScreen> {
           FocusManager.instance.primaryFocus?.unfocus();
           onTap();
         },
-        borderRadius: BorderRadius.circular(_radius),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: _soft,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(icon, color: _ink, size: 20),
+                    child: Icon(icon, color: const Color(0xFF64748B), size: 18),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2872,9 +3231,10 @@ class _ReportScreenState extends State<ReportScreen> {
                         Text(
                           hasValue ? "Selected" : "Tap to choose",
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: _muted,
+                            color: Color(0xFF94A3B8),
+                            height: 1.2,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -2884,25 +3244,25 @@ class _ReportScreenState extends State<ReportScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight:
-                                hasValue ? FontWeight.w700 : FontWeight.w500,
-                            color: hasValue ? _ink : const Color(0xFFB0B0B0),
+                            fontWeight: FontWeight.w600,
+                            color: hasValue
+                                ? const Color(0xFF0F172A)
+                                : _placeholder,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    width: 28,
-                    height: 28,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: _soft,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: _muted,
+                      color: Color(0xFF64748B),
                       size: 18,
                     ),
                   ),
@@ -2911,7 +3271,7 @@ class _ReportScreenState extends State<ReportScreen> {
               if (errorText != null) ...[
                 const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.only(left: 56),
+                  padding: const EdgeInsets.only(left: 48),
                   child: Text(
                     errorText,
                     style: const TextStyle(
@@ -2931,58 +3291,71 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _textInputRow({
     required IconData icon,
-    required Color iconColor,
     required TextEditingController controller,
     required String hint,
+    String hintLabel = "Type equipment name",
     String? errorText,
     required ValueChanged<String> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: _soft,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: _ink, size: 20),
+            child: Icon(icon, color: const Color(0xFF64748B), size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: _ink,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                errorText: errorText,
-                hintStyle: const TextStyle(
-                  color: Color(0xFFB0B0B0),
-                  fontWeight: FontWeight.w400,
-                  fontSize: 15,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hintLabel,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF94A3B8),
+                    height: 1.2,
+                  ),
                 ),
-                errorStyle: const TextStyle(
-                  color: Color(0xFFEF4444),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                TextField(
+                  controller: controller,
+                  onChanged: onChanged,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F172A),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    errorText: errorText,
+                    hintStyle: const TextStyle(
+                      color: _placeholder,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                    ),
+                    errorStyle: const TextStyle(
+                      color: Color(0xFFEF4444),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                  ),
                 ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
+              ],
             ),
           ),
         ],
@@ -3031,7 +3404,6 @@ class _ReportScreenState extends State<ReportScreen> {
         ),
       );
     }
-    // Only show failure copy after Submit Report validation.
     if (reporterError != null && employeeIdError != null) {
       return Text(
         reporterError!,
@@ -3052,47 +3424,98 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  InputDecoration _minimalInputDecoration({
-    String? labelText,
+  InputDecoration _fieldDecoration({
     String? hintText,
     String? errorText,
     Widget? prefixIcon,
-    Widget? suffixIcon,
     EdgeInsetsGeometry? contentPadding,
   }) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(_radius),
+      borderSide: const BorderSide(color: _borderSoft),
+    );
     return InputDecoration(
-      labelText: labelText,
       hintText: hintText,
       errorText: errorText,
       prefixIcon: prefixIcon,
-      suffixIcon: suffixIcon,
       filled: true,
-      fillColor: Colors.transparent,
+      fillColor: Colors.white,
       isDense: true,
       contentPadding: contentPadding ??
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      labelStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
-        fontWeight: FontWeight.w500,
-        fontSize: 13,
-      ),
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       hintStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
-        fontWeight: FontWeight.w400,
+        color: Color(0xFF9AA1B5),
+        fontWeight: FontWeight.w500,
         fontSize: 14,
+        letterSpacing: 0.4,
       ),
       errorStyle: const TextStyle(
         color: Color(0xFFEF4444),
         fontSize: 12,
         fontWeight: FontWeight.w500,
       ),
-      prefixIconColor: _muted,
-      suffixIconColor: _muted,
-      border: InputBorder.none,
-      enabledBorder: InputBorder.none,
-      focusedBorder: InputBorder.none,
-      errorBorder: InputBorder.none,
-      focusedErrorBorder: InputBorder.none,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: const BorderSide(color: _blue),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
     );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+  final double dashWidth;
+  final double dashGap;
+
+  _DashedBorderPainter({
+    required this.color,
+    this.radius = 20,
+  })  : strokeWidth = 1.5,
+        dashWidth = 6,
+        dashGap = 4;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        strokeWidth / 2,
+        strokeWidth / 2,
+        size.width - strokeWidth,
+        size.height - strokeWidth,
+      ),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = (distance + dashWidth).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance += dashWidth + dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

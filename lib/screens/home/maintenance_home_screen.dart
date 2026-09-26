@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
@@ -7,8 +9,11 @@ import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/role_session.dart';
 import '../../utils/equipment_icon.dart';
+import '../../widgets/product_list_row.dart';
+import '../../widgets/chart_tooltip.dart';
 import '../equipment/equipment_screen.dart';
 import '../qr/qr_scanner_screen.dart';
+import '../qr/scan_to_manage.dart';
 import '../schedule/schedule_alerts_screen.dart';
 import '../schedule/schedule_screen.dart';
 
@@ -47,9 +52,10 @@ class _MaintenanceTool {
 class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
-  static const _blue = Color(0xFF2563EB);
+  static const _blue = Color(0xFF0025CC);
+  static const _blueLight = Color(0xFF93C5FD);
   static const _navy = Color(0xFF0B2F64);
-  static const _bg = Color(0xFFF5F5F5);
+  static const _bg = Colors.white;
   static const _accent = Color(0xFF0B2F64);
 
   static const _tools = [
@@ -97,6 +103,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
   int _tabIndex = 0;
   /// 0 = Needs attention, 1 = Recent fixes
   int _activitySegment = 0;
+  String _overviewRange = "Month";
+  String _recentRange = "Month";
 
   @override
   void initState() {
@@ -456,9 +464,227 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
 
   String get _greeting {
     final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning";
-    if (hour < 18) return "Good Afternoon";
-    return "Good Evening";
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
+
+  String get _firstName {
+    final parts = _name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return "there";
+    // Prefer a friendly first token (skip generic team labels).
+    if (_name.toLowerCase().contains("maintenance")) return "Team";
+    return parts.first;
+  }
+
+  String _headerTip(MaintenanceRecent? recent) {
+    final overdue = recent?.overdueSchedules ?? 0;
+    final dueSoon = recent?.dueSoonSchedulesCount ?? 0;
+    if (overdue > 0) {
+      return "You have $overdue overdue schedule${overdue == 1 ? '' : 's'}. Prioritize those units when you're on campus.";
+    }
+    if (dueSoon > 0) {
+      return "$dueSoon unit${dueSoon == 1 ? '' : 's'} due soon. A quick scan keeps maintenance ahead of schedule.";
+    }
+    return "Campus equipment looks clear today. Scan a QR when you're on-site to manage a unit.";
+  }
+
+  Widget _buildHeader() {
+    final dateLabel =
+        DateFormat("EEEE, MMMM d").format(DateTime.now()).toUpperCase();
+    const accent = Color(0xFF0025CC);
+    const accentSoft = Color(0xFFE8EEFF);
+    const band = Color(0xFF0025CC);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top: icons only (right), then date + greeting below.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: FutureBuilder<MaintenanceRecent>(
+                  future: _recentFuture,
+                  builder: (context, snap) {
+                    final recent = snap.data ?? _cachedRecent;
+                    final alertCount = (recent?.dueSoonSchedulesCount ?? 0) +
+                        (recent?.overdueSchedules ?? 0);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _CircleIcon(
+                          icon: Icons.notifications_none_rounded,
+                          color: accent,
+                          background: accentSoft,
+                          badge: alertCount > 0,
+                          onTap: () async {
+                            await _pushAndKeepSearchClosed(
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ScheduleAlertsScreen(),
+                                ),
+                              ),
+                            );
+                            if (mounted) {
+                              await _refreshRecent(keepScroll: true);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _CircleIcon(
+                          icon: Icons.settings_outlined,
+                          color: accent,
+                          background: accentSoft,
+                          onTap: () => _confirmLogout(context),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                dateLabel,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
+                  color: Color(0xFF9AA3B2),
+                ),
+              ),
+              //const SizedBox(height: 2),
+              Text.rich(
+                TextSpan(
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1A1C1E),
+                    letterSpacing: -0.6,
+                    height: 1.15,
+                  ),
+                  children: [
+                    TextSpan(text: "$_greeting, "),
+                    TextSpan(
+                      text: "$_firstName!",
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        // Mascot + speech bubble sitting on a blue band (mascot overlaps bubble).
+        FutureBuilder<MaintenanceRecent>(
+          future: _recentFuture,
+          builder: (context, snap) {
+            final tip = _headerTip(snap.data ?? _cachedRecent);
+            return SizedBox(
+              height: 128,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 72,
+                    child: Container(color: band),
+                  ),
+                  Positioned(
+                    left: 12,
+                    bottom: 0,
+                    child: Image.asset(
+                      "assets/images/paayo_home.png",
+                      height: 118,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                      errorBuilder: (_, __, ___) => Image.asset(
+                        "assets/images/paayo_logo_original.png",
+                        height: 96,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  // Bubble last so it sits above the mascot layer.
+                  Positioned(
+                    left: 108,
+                    right: 16,
+                    bottom: 18,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 14,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                "PaAyo",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: accent,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tip,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF5B6472),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Speech-bubble tail pointing toward PaAyo (bottom-left).
+                        Positioned(
+                          left: -10,
+                          bottom: 14,
+                          child: CustomPaint(
+                            size: const Size(12, 16),
+                            painter: _SpeechTailPainter(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: _buildSearchBar(),
+        ),
+      ],
+    );
   }
 
   @override
@@ -518,13 +744,9 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
+              SliverToBoxAdapter(child: _buildDashboardBody()),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                sliver: SliverToBoxAdapter(child: _buildWelcomeCard()),
-              ),
-              SliverToBoxAdapter(child: _buildStatsSection()),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                 sliver: SliverToBoxAdapter(
                   child: const Text(
                     "Quick Actions",
@@ -538,15 +760,358 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 ),
               ),
               SliverToBoxAdapter(child: _buildQuickActions()),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 48),
-                sliver: SliverToBoxAdapter(child: _buildRecentSection()),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 72)),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildDashboardBody() {
+    return FutureBuilder<MaintenanceRecent>(
+      future: _recentFuture,
+      builder: (context, snap) {
+        final recent = snap.data ?? _cachedRecent;
+        if (recent == null &&
+            snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+          );
+        }
+        if (recent == null) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                const Text(
+                  "Couldn't load dashboard",
+                  style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
+                ),
+                const SizedBox(height: 8),
+                TextButton(onPressed: _refreshRecent, child: const Text("Retry")),
+              ],
+            ),
+          );
+        }
+
+        final dateFmt = DateFormat("MMM d, yyyy");
+        final todayLabel = dateFmt.format(DateTime.now());
+        final history = _filterHistoryByRange(recent.recentHistory, _recentRange);
+        final chart = _overviewSeries(recent);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 148,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                children: [
+                  _SummaryMetricCard(
+                    title: "Total Equipment",
+                    value: "${recent.equipmentCount}",
+                    dateLabel: todayLabel,
+                    sparkline: _sparkFromCount(recent.equipmentCount, up: true),
+                    changeLabel: "+${recent.equipmentCount}",
+                    changePositive: true,
+                    footnote: "${recent.underMaintenance} in maintenance",
+                    onTap: () => _pushAndKeepSearchClosed(
+                      Navigator.pushNamed(context, "/equipment"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _SummaryMetricCard(
+                    title: "Due Soon",
+                    value: "${recent.dueSoonSchedulesCount}",
+                    dateLabel: todayLabel,
+                    sparkline: _sparkFromCount(
+                      recent.dueSoonSchedulesCount,
+                      up: recent.dueSoonSchedulesCount > 0,
+                    ),
+                    changeLabel: recent.dueSoonSchedulesCount > 0
+                        ? "+${recent.dueSoonSchedulesCount}"
+                        : "0",
+                    changePositive: recent.dueSoonSchedulesCount == 0,
+                    footnote: "Within ${recent.dueSoonDays} days",
+                    onTap: () => _pushAndKeepSearchClosed(
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ScheduleAlertsScreen(
+                            filter: ScheduleAlertFilter.dueSoon,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _SummaryMetricCard(
+                    title: "Overdue",
+                    value: "${recent.overdueSchedules}",
+                    dateLabel: todayLabel,
+                    sparkline: _sparkFromCount(
+                      recent.overdueSchedules,
+                      up: false,
+                    ),
+                    changeLabel: recent.overdueSchedules > 0
+                        ? "+${recent.overdueSchedules}"
+                        : "0",
+                    changePositive: recent.overdueSchedules == 0,
+                    footnote: "Past due schedules",
+                    onTap: () => _pushAndKeepSearchClosed(
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ScheduleAlertsScreen(
+                            filter: ScheduleAlertFilter.overdue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _SummaryMetricCard(
+                    title: "Under Maintenance",
+                    value: "${recent.underMaintenance}",
+                    dateLabel: todayLabel,
+                    sparkline: _sparkFromCount(recent.underMaintenance, up: true),
+                    changeLabel: "${recent.attentionEquipment.length} units",
+                    changePositive: true,
+                    footnote: "Needs attention",
+                    onTap: () => _pushAndKeepSearchClosed(
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EquipmentScreen(
+                            attentionOnly: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Maintenance Overview",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                  _MonthDropdown(
+                    value: _overviewRange,
+                    onTap: () => _pickRange(isOverview: true),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: SizedBox(
+                height: 180,
+                child: _HomeAreaLineChart(
+                  labels: chart.labels,
+                  seriesA: chart.dueSoon, // blue
+                  seriesB: chart.overdue, // yellow
+                  colorA: _blue,
+                  colorB: const Color(0xFFFFF200),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Recent Activity",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                  _MonthDropdown(
+                    value: _recentRange,
+                    onTap: () => _pickRange(isOverview: false),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (history.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  "No recent maintenance activity yet.",
+                  style: TextStyle(color: _muted),
+                ),
+              )
+            else
+              for (final r in history.take(8))
+                _RecentOrderRow(
+                  title: r.equipmentName ?? "Equipment",
+                  subtitle: ProductListRow.joinMeta([
+                    r.status,
+                    if (r.room != null && r.room!.trim().isNotEmpty) r.room,
+                  ]),
+                  value: DateFormat("MMM d").format(r.date.toLocal()),
+                  status: r.status,
+                  onTap: () => promptScanToManage(
+                    context,
+                    equipmentName: r.equipmentName,
+                    destination: ScanDestination.history,
+                  ),
+                ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _pickRange({required bool isOverview}) async {
+    final current = isOverview ? _overviewRange : _recentRange;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final option in ["Month", "Week", "Today"])
+                ListTile(
+                  title: Text(option),
+                  trailing: current == option
+                      ? const Icon(Icons.check_rounded, color: _blue)
+                      : null,
+                  onTap: () => Navigator.pop(context, option),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      if (isOverview) {
+        _overviewRange = chosen;
+      } else {
+        _recentRange = chosen;
+      }
+    });
+  }
+
+  List<MaintenanceRecord> _filterHistoryByRange(
+    List<MaintenanceRecord> all,
+    String range,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime start;
+    switch (range) {
+      case "Today":
+        start = today;
+      case "Week":
+        start = today.subtract(const Duration(days: 6));
+      default:
+        start = DateTime(today.year, today.month - 1, today.day);
+    }
+    return all.where((r) {
+      final d = DateTime(r.date.year, r.date.month, r.date.day);
+      return !d.isBefore(start);
+    }).toList();
+  }
+
+  ({List<String> labels, List<double> overdue, List<double> dueSoon})
+      _overviewSeries(MaintenanceRecent recent) {
+    final labels = <String>[];
+    final overdue = <double>[];
+    final dueSoon = <double>[];
+    final now = DateTime.now();
+
+    if (_overviewRange == "Today" || _overviewRange == "Week") {
+      final days = _overviewRange == "Today" ? 1 : 7;
+      for (var i = days - 1; i >= 0; i--) {
+        final day = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: i));
+        labels.add(DateFormat("E").format(day).substring(0, 1));
+        var o = 0;
+        var d = 0;
+        for (final s in [
+          ...recent.dueSoonSchedules,
+          ...recent.upcomingSchedules,
+        ]) {
+          if (s.nextDate == null) continue;
+          final nd = DateTime(
+            s.nextDate!.year,
+            s.nextDate!.month,
+            s.nextDate!.day,
+          );
+          if (nd != day) continue;
+          if (s.isOverdue) {
+            o++;
+          } else if (s.isDueSoon) {
+            d++;
+          }
+        }
+        // Also count history fixes as activity for dueSoon series secondary.
+        for (final r in recent.recentHistory) {
+          final rd = DateTime(r.date.year, r.date.month, r.date.day);
+          if (rd == day) d++;
+        }
+        overdue.add(o.toDouble());
+        dueSoon.add(d.toDouble());
+      }
+    } else {
+      for (var m = 6; m >= 0; m--) {
+        final month = DateTime(now.year, now.month - m, 1);
+        labels.add(DateFormat("MMM").format(month));
+        final next = DateTime(month.year, month.month + 1, 1);
+        var o = 0;
+        var d = 0;
+        for (final s in [
+          ...recent.dueSoonSchedules,
+          ...recent.upcomingSchedules,
+        ]) {
+          if (s.nextDate == null) continue;
+          final nd = s.nextDate!;
+          if (nd.isBefore(month) || !nd.isBefore(next)) continue;
+          if (s.isOverdue) {
+            o++;
+          } else {
+            d++;
+          }
+        }
+        for (final r in recent.recentHistory) {
+          final rd = r.date;
+          if (!rd.isBefore(month) && rd.isBefore(next)) d++;
+        }
+        overdue.add(o.toDouble());
+        dueSoon.add(d.toDouble());
+      }
+    }
+    return (labels: labels, overdue: overdue, dueSoon: dueSoon);
+  }
+
+  List<double> _sparkFromCount(int n, {required bool up}) {
+    if (up) return [0.2, 0.35, 0.55, 0.45, 0.85];
+    return [0.9, 0.7, 0.35, 0.5, 0.25];
   }
 
   Widget _buildQuickActions() {
@@ -748,11 +1313,13 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
         final overdueList = overdueById.values.toList();
         final dueSoonList =
             recent.dueSoonSchedules.where((s) => !s.isOverdue).toList();
+        final overduePreview = overdueList.take(3).toList();
+        final dueSoonPreview = dueSoonList.take(3).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (overdueList.isNotEmpty) ...[
+            if (overduePreview.isNotEmpty) ...[
               _SectionHeader(
                 title: "Overdue",
                 onSeeAll: () => _pushAndKeepSearchClosed(
@@ -767,60 +1334,66 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _QuietListCard(
-                children: [
-                  for (final s in overdueList.take(3))
-                    _QuietListRow(
-                      leading: Image.asset(
-                        "assets/images/overdue_date.png",
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.hourglass_bottom_rounded,
-                          color: Color(0xFFEF4444),
-                          size: 28,
-                        ),
+              for (var i = 0; i < overduePreview.length; i++)
+                ProductListRow(
+                  leading: ProductListRow.thumbnail(
+                    background: const Color(0xFFFEE2E2),
+                    child: Image.asset(
+                      "assets/images/overdue_date.png",
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.hourglass_bottom_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 26,
                       ),
-                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  title: overduePreview[i].title,
+                  subtitle: ProductListRow.joinMeta([
+                    overduePreview[i].equipmentName ?? "Equipment",
+                    if (overduePreview[i].room != null &&
+                        overduePreview[i].room!.trim().isNotEmpty &&
+                        overduePreview[i].room != "—")
+                      overduePreview[i].room,
+                    if (overduePreview[i].nextDate != null)
+                      "Next: ${dateFmt.format(overduePreview[i].nextDate!)}",
+                    overduePreview[i].relativeDueLabel,
+                  ]),
+                  actionLabel: "View",
+                  showDivider: i < overduePreview.length - 1,
+                  padding: const EdgeInsets.fromLTRB(0, 12, 4, 12),
+                  onTap: () {
+                    final s = overduePreview[i];
+                    _showCardPreview(
                       title: s.title,
-                      subtitle: [
-                        s.equipmentName ?? "Equipment",
+                      accent: const Color(0xFFEF4444),
+                      icon: Icons.hourglass_bottom_rounded,
+                      badge: s.relativeDueLabel,
+                      destination: ScanDestination.schedule,
+                      details: [
+                        (
+                          label: "Equipment",
+                          value: s.equipmentName ?? "Equipment",
+                        ),
                         if (s.room != null &&
                             s.room!.trim().isNotEmpty &&
                             s.room != "—")
-                          s.room!,
-                      ].join(" · "),
-                      trailing: s.relativeDueLabel,
-                      onTap: () => _showCardPreview(
-                        title: s.title,
-                        accent: const Color(0xFFEF4444),
-                        icon: Icons.hourglass_bottom_rounded,
-                        badge: s.relativeDueLabel,
-                        destination: ScanDestination.schedule,
-                        details: [
+                          (label: "Room", value: s.room!),
+                        if (s.nextDate != null)
                           (
-                            label: "Equipment",
-                            value: s.equipmentName ?? "Equipment",
+                            label: "Next due",
+                            value: dateFmt.format(s.nextDate!),
                           ),
-                          if (s.room != null &&
-                              s.room!.trim().isNotEmpty &&
-                              s.room != "—")
-                            (label: "Room", value: s.room!),
-                          if (s.nextDate != null)
-                            (
-                              label: "Next due",
-                              value: dateFmt.format(s.nextDate!),
-                            ),
-                          (label: "Status", value: s.urgencyLabel),
-                          if (s.frequency.trim().isNotEmpty &&
-                              s.frequency != "—")
-                            (label: "Frequency", value: s.frequency),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+                        (label: "Status", value: s.urgencyLabel),
+                        if (s.frequency.trim().isNotEmpty &&
+                            s.frequency != "—")
+                          (label: "Frequency", value: s.frequency),
+                      ],
+                    );
+                  },
+                ),
             ],
-            if (dueSoonList.isNotEmpty) ...[
+            if (dueSoonPreview.isNotEmpty) ...[
               const SizedBox(height: 22),
               _SectionHeader(
                 title: "Due within ${recent.dueSoonDays} days",
@@ -836,58 +1409,64 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _QuietListCard(
-                children: [
-                  for (final s in dueSoonList.take(3))
-                    _QuietListRow(
-                      leading: Image.asset(
-                        "assets/images/due_within.png",
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.schedule_rounded,
-                          color: Color(0xFFF59E0B),
-                          size: 28,
-                        ),
+              for (var i = 0; i < dueSoonPreview.length; i++)
+                ProductListRow(
+                  leading: ProductListRow.thumbnail(
+                    background: const Color(0xFFFFF7ED),
+                    child: Image.asset(
+                      "assets/images/due_within.png",
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.schedule_rounded,
+                        color: Color(0xFFF59E0B),
+                        size: 26,
                       ),
-                      color: const Color(0xFFF59E0B),
+                    ),
+                  ),
+                  title: dueSoonPreview[i].title,
+                  subtitle: ProductListRow.joinMeta([
+                    dueSoonPreview[i].equipmentName ?? "Equipment",
+                    if (dueSoonPreview[i].room != null &&
+                        dueSoonPreview[i].room!.trim().isNotEmpty &&
+                        dueSoonPreview[i].room != "—")
+                      dueSoonPreview[i].room,
+                    if (dueSoonPreview[i].nextDate != null)
+                      "Next: ${dateFmt.format(dueSoonPreview[i].nextDate!)}",
+                    dueSoonPreview[i].relativeDueLabel,
+                  ]),
+                  actionLabel: "View",
+                  showDivider: i < dueSoonPreview.length - 1,
+                  padding: const EdgeInsets.fromLTRB(0, 12, 4, 12),
+                  onTap: () {
+                    final s = dueSoonPreview[i];
+                    _showCardPreview(
                       title: s.title,
-                      subtitle: [
-                        s.equipmentName ?? "Equipment",
+                      accent: const Color(0xFFF59E0B),
+                      icon: Icons.schedule_rounded,
+                      badge: s.relativeDueLabel,
+                      destination: ScanDestination.schedule,
+                      details: [
+                        (
+                          label: "Equipment",
+                          value: s.equipmentName ?? "Equipment",
+                        ),
                         if (s.room != null &&
                             s.room!.trim().isNotEmpty &&
                             s.room != "—")
-                          s.room!,
-                      ].join(" · "),
-                      trailing: s.relativeDueLabel,
-                      onTap: () => _showCardPreview(
-                        title: s.title,
-                        accent: const Color(0xFFF59E0B),
-                        icon: Icons.schedule_rounded,
-                        badge: s.relativeDueLabel,
-                        destination: ScanDestination.schedule,
-                        details: [
+                          (label: "Room", value: s.room!),
+                        if (s.nextDate != null)
                           (
-                            label: "Equipment",
-                            value: s.equipmentName ?? "Equipment",
+                            label: "Next due",
+                            value: dateFmt.format(s.nextDate!),
                           ),
-                          if (s.room != null &&
-                              s.room!.trim().isNotEmpty &&
-                              s.room != "—")
-                            (label: "Room", value: s.room!),
-                          if (s.nextDate != null)
-                            (
-                              label: "Next due",
-                              value: dateFmt.format(s.nextDate!),
-                            ),
-                          (label: "Status", value: s.urgencyLabel),
-                          if (s.frequency.trim().isNotEmpty &&
-                              s.frequency != "—")
-                            (label: "Frequency", value: s.frequency),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+                        (label: "Status", value: s.urgencyLabel),
+                        if (s.frequency.trim().isNotEmpty &&
+                            s.frequency != "—")
+                          (label: "Frequency", value: s.frequency),
+                      ],
+                    );
+                  },
+                ),
             ],
             if (recent.attentionEquipment.isNotEmpty ||
                 recent.recentHistory.isNotEmpty) ...[
@@ -1098,82 +1677,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _CircleIcon(
-                    icon: Icons.grid_view_rounded,
-                    onTap: () {},
-                  ),
-                  FutureBuilder<MaintenanceRecent>(
-                    future: _recentFuture,
-                    builder: (context, snap) {
-                      final recent = snap.data ?? _cachedRecent;
-                      final alertCount = (recent?.dueSoonSchedulesCount ?? 0) +
-                          (recent?.overdueSchedules ?? 0);
-                      return _CircleIcon(
-                        icon: Icons.notifications_none_rounded,
-                        badge: alertCount > 0,
-                        onTap: () async {
-                          await _pushAndKeepSearchClosed(
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ScheduleAlertsScreen(),
-                              ),
-                            ),
-                          );
-                          if (mounted) await _refreshRecent(keepScroll: true);
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
-              Image.asset(
-                "assets/images/paayo_logo_original.png",
-                height: 34,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
-            ],
-          ),
-          //const SizedBox(height: 20),
-          /*Text(
-            "Hi, $_name!",
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: _ink,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _greeting,
-            style: const TextStyle(
-              fontSize: 14,
-              color: _muted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),*/
-          const SizedBox(height: 16),
-          _buildSearchBar(),
-          const SizedBox(height: 20),
-        ],
-      ),
     );
   }
 
@@ -1473,165 +1976,6 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _QuietListCard extends StatelessWidget {
-  final List<Widget> children;
-
-  const _QuietListCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        for (int i = 0; i < children.length; i++) ...[
-          children[i],
-          if (i != children.length - 1) const SizedBox(height: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _QuietListRow extends StatelessWidget {
-  final IconData? icon;
-  final Widget? leading;
-  final Color color;
-  final Color? iconBg;
-  final String title;
-  final String subtitle;
-  final String? trailing;
-  final VoidCallback onTap;
-  final bool compact;
-
-  const _QuietListRow({
-    this.icon,
-    this.leading,
-    required this.color,
-    this.iconBg,
-    required this.title,
-    required this.subtitle,
-    this.trailing,
-    required this.onTap,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final leadSize = 50.0;
-    final pad = compact
-        ? const EdgeInsets.fromLTRB(12, 8, 8, 8)
-        : const EdgeInsets.fromLTRB(14, 12, 10, 12);
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(compact ? 16 : 20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(compact ? 16 : 20),
-        child: Container(
-          padding: pad,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? 16 : 20),
-            border: Border.all(color: const Color(0xFFEEF0F4)),
-          ),
-          child: Row(
-            children: [
-              if (leading != null)
-                SizedBox(
-                  width: leadSize,
-                  height: leadSize,
-                  child: leading,
-                )
-              else
-                Container(
-                  width: leadSize,
-                  height: leadSize,
-                  decoration: BoxDecoration(
-                    color: iconBg ?? color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-              SizedBox(width: compact ? 12 : 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: compact ? 14.5 : 15,
-                        color: const Color(0xFF0F172A),
-                        height: 1.15,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    if (subtitle.trim().isNotEmpty) ...[
-                      SizedBox(height: compact ? 2 : 4),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: compact ? 12.5 : 13,
-                          color: const Color(0xFF64748B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                    if (trailing != null) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.schedule_rounded,
-                              size: 11,
-                              color: color,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              trailing!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF94A3B8),
-                size: 22,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2051,19 +2395,23 @@ class _CircleIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool badge;
+  final Color color;
+  final Color background;
 
   const _CircleIcon({
     required this.icon,
     required this.onTap,
     this.badge = false,
+    this.color = const Color(0xFF0F172A),
+    this.background = Colors.white,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: background,
       shape: const CircleBorder(
-        side: BorderSide(color: Color(0xFFEEF0F4)),
+        side: BorderSide(color: Color(0xFFE8EBE6)),
       ),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -2074,7 +2422,7 @@ class _CircleIcon extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(icon, color: const Color(0xFF0F172A), size: 22),
+              Icon(icon, color: color, size: 22),
               if (badge)
                 Positioned(
                   top: 12,
@@ -2093,6 +2441,27 @@ class _CircleIcon extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SpeechTailPainter extends CustomPainter {
+  final Color color;
+
+  _SpeechTailPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(0, size.height * 0.55)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpeechTailPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 
@@ -2184,7 +2553,7 @@ class _BottomItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? const Color(0xFF2563EB) : const Color(0xFF94A3B8);
+    final color = active ? const Color(0xFF0025CC) : const Color(0xFF94A3B8);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -2207,5 +2576,599 @@ class _BottomItem extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _MonthDropdown extends StatelessWidget {
+  final String value;
+  final VoidCallback onTap;
+
+  const _MonthDropdown({required this.value, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: StadiumBorder(side: BorderSide(color: Colors.grey.shade300)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryMetricCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String dateLabel;
+  final List<double> sparkline;
+  final String changeLabel;
+  final bool changePositive;
+  final String footnote;
+  final VoidCallback onTap;
+
+  const _SummaryMetricCard({
+    required this.title,
+    required this.value,
+    required this.dateLabel,
+    required this.sparkline,
+    required this.changeLabel,
+    required this.changePositive,
+    required this.footnote,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 260,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFEEF0F4)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    dateLabel,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.6,
+                        height: 1.05,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 56,
+                    height: 28,
+                    child: CustomPaint(
+                      painter: _HomeSparklinePainter(
+                        values: sparkline,
+                        color: changePositive
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    changeLabel,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: changePositive
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      footnote,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentOrderRow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String value;
+  final String status;
+  final VoidCallback onTap;
+
+  const _RecentOrderRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.status,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  color: const Color(0xFFF3F4F6),
+                  alignment: Alignment.center,
+                  child: EquipmentGraphic(
+                    name: title,
+                    size: 28,
+                    fallbackColor: const Color(0xFF0025CC),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle.isEmpty ? "Maintenance" : subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8EEFF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0025CC),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeAreaLineChart extends StatefulWidget {
+  final List<String> labels;
+  final List<double> seriesA;
+  final List<double> seriesB;
+  final Color colorA;
+  final Color colorB;
+
+  const _HomeAreaLineChart({
+    required this.labels,
+    required this.seriesA,
+    required this.seriesB,
+    required this.colorA,
+    required this.colorB,
+  });
+
+  @override
+  State<_HomeAreaLineChart> createState() => _HomeAreaLineChartState();
+}
+
+class _HomeAreaLineChartState extends State<_HomeAreaLineChart> {
+  int? _focus;
+
+  void _setFocus(Offset local, double width) {
+    if (widget.labels.isEmpty || width <= 0) return;
+    final i = chartNearestIndex(local.dx, width, widget.labels.length);
+    if (_focus != i) setState(() => _focus = i);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final peak = [...widget.seriesA, ...widget.seriesB]
+        .fold<double>(0, (m, v) => math.max(m, v));
+    final maxV = peak <= 0 ? 4.0 : peak * 1.25;
+
+    return Column(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final focusX = _focus == null || widget.labels.length <= 1
+                  ? null
+                  : constraints.maxWidth *
+                      (_focus! / (widget.labels.length - 1));
+              return TapRegion(
+                onTapOutside: (_) {
+                  if (_focus != null) setState(() => _focus = null);
+                },
+                child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (d) =>
+                    _setFocus(d.localPosition, constraints.maxWidth),
+                onPanUpdate: (d) =>
+                    _setFocus(d.localPosition, constraints.maxWidth),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _HomeAreaLinePainter(
+                          seriesA: widget.seriesA,
+                          seriesB: widget.seriesB,
+                          colorA: widget.colorA,
+                          colorB: widget.colorB,
+                          peak: maxV,
+                          focusIndex: _focus,
+                          labelCount: widget.labels.length,
+                        ),
+                      ),
+                    ),
+                    if (_focus != null && focusX != null)
+                      Positioned(
+                        left: (focusX - 70).clamp(
+                          0.0,
+                          math.max(0.0, constraints.maxWidth - 140),
+                        ),
+                        top: 8,
+                        child: ChartTooltipBubble(
+                          title: widget.labels[_focus!],
+                          rows: [
+                            ChartTooltipRow(
+                              color: widget.colorA,
+                              label: "Due soon",
+                              value: chartFmtValue(
+                                _focus! < widget.seriesA.length
+                                    ? widget.seriesA[_focus!]
+                                    : 0,
+                              ),
+                            ),
+                            ChartTooltipRow(
+                              color: widget.colorB,
+                              label: "Overdue",
+                              value: chartFmtValue(
+                                _focus! < widget.seriesB.length
+                                    ? widget.seriesB[_focus!]
+                                    : 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final label in widget.labels)
+              Expanded(
+                child: Text(
+                  label.length > 3 ? label.substring(0, 3) : label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeAreaLinePainter extends CustomPainter {
+  final List<double> seriesA;
+  final List<double> seriesB;
+  final Color colorA;
+  final Color colorB;
+  final double peak;
+  final int? focusIndex;
+  final int labelCount;
+
+  _HomeAreaLinePainter({
+    required this.seriesA,
+    required this.seriesB,
+    required this.colorA,
+    required this.colorB,
+    required this.peak,
+    this.focusIndex,
+    required this.labelCount,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = math.max(seriesA.length, seriesB.length);
+    if (n == 0 || peak <= 0) return;
+
+    final grid = Paint()
+      ..color = const Color(0xFFE5E7EB)
+      ..strokeWidth = 1;
+    for (var g = 0; g < 4; g++) {
+      final y = size.height * (g / 3);
+      _drawDashedLine(canvas, Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    Offset pt(List<double> values, int i) {
+      final x = n == 1 ? size.width / 2 : size.width * (i / (n - 1));
+      final v = i < values.length ? values[i] : 0.0;
+      final y = size.height - (v / peak) * size.height;
+      return Offset(x, y.clamp(4.0, size.height - 2));
+    }
+
+    void drawSeries(List<double> values, Color color, {double stroke = 2.5}) {
+      if (values.isEmpty) return;
+
+      final line = Path();
+      final fill = Path();
+      for (var i = 0; i < n; i++) {
+        final p = pt(values, i);
+        if (i == 0) {
+          line.moveTo(p.dx, p.dy);
+          fill.moveTo(p.dx, size.height);
+          fill.lineTo(p.dx, p.dy);
+        } else {
+          final prev = pt(values, i - 1);
+          final cx = (prev.dx + p.dx) / 2;
+          line.cubicTo(cx, prev.dy, cx, p.dy, p.dx, p.dy);
+          fill.cubicTo(cx, prev.dy, cx, p.dy, p.dx, p.dy);
+        }
+      }
+      final last = pt(values, n - 1);
+      fill.lineTo(last.dx, size.height);
+      fill.close();
+
+      final shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          color.withValues(alpha: 0.18),
+          color.withValues(alpha: 0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+      canvas.drawPath(fill, Paint()..shader = shader);
+      canvas.drawPath(
+        line,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    drawSeries(seriesB, colorB, stroke: 2.3);
+    drawSeries(seriesA, colorA, stroke: 2.6);
+
+    if (focusIndex != null && labelCount > 0) {
+      final fi = focusIndex!.clamp(0, math.max(0, labelCount - 1));
+      final fx = labelCount == 1
+          ? size.width / 2
+          : size.width * (fi / (labelCount - 1));
+      canvas.drawLine(
+        Offset(fx, 0),
+        Offset(fx, size.height),
+        Paint()
+          ..color = const Color(0xFF94A3B8)
+          ..strokeWidth = 1.4,
+      );
+      if (seriesA.isNotEmpty) {
+        final ai = fi.clamp(0, seriesA.length - 1).toInt();
+        final p = pt(seriesA, ai);
+        canvas.drawCircle(p, 4.5, Paint()..color = Colors.white);
+        canvas.drawCircle(
+          p,
+          4.5,
+          Paint()
+            ..color = colorA
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
+      if (seriesB.isNotEmpty) {
+        final bi = fi.clamp(0, seriesB.length - 1).toInt();
+        final p = pt(seriesB, bi);
+        canvas.drawCircle(p, 4.5, Paint()..color = Colors.white);
+        canvas.drawCircle(
+          p,
+          4.5,
+          Paint()
+            ..color = colorB
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
+    }
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
+    const dash = 5.0;
+    const gap = 4.0;
+    final total = (b - a).distance;
+    if (total <= 0) return;
+    final dir = (b - a) / total;
+    var dist = 0.0;
+    while (dist < total) {
+      final start = a + dir * dist;
+      final end = a + dir * math.min(dist + dash, total);
+      canvas.drawLine(start, end, paint);
+      dist += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomeAreaLinePainter oldDelegate) {
+    return oldDelegate.seriesA != seriesA ||
+        oldDelegate.seriesB != seriesB ||
+        oldDelegate.peak != peak ||
+        oldDelegate.colorA != colorA ||
+        oldDelegate.colorB != colorB ||
+        oldDelegate.focusIndex != focusIndex;
+  }
+}
+
+class _HomeSparklinePainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+
+  _HomeSparklinePainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    final minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    final span = (maxV - minV).abs() < 0.001 ? 1.0 : maxV - minV;
+    const pad = 2.0;
+    final h = size.height - pad * 2;
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final x = size.width * (i / (values.length - 1));
+      final y = pad + h - ((values[i] - minV) / span) * h;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomeSparklinePainter oldDelegate) {
+    return oldDelegate.values != values || oldDelegate.color != color;
   }
 }

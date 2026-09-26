@@ -19,11 +19,12 @@ class EquipmentProfileScreen extends StatefulWidget {
 }
 
 class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
-  static const _ink = Color(0xFF111111);
-  static const _muted = Color(0xFF8A8A8A);
+  static const _ink = Color(0xFF111827);
+  static const _blue = Color(0xFF0025CC);
+  static const _muted = Color(0xFF9CA3AF);
   static const _line = Color(0xFFEEEEEE);
   static const _page = Color(0xFFF3F3F3);
-  static const _yellow = Color(0xFFFBBF24);
+  static const _accent = Color(0xFFFFF200);
   static const _soft = Color(0xFFF7F7F7);
 
   final MaintenanceService _service = MaintenanceService();
@@ -42,14 +43,14 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
     final s = _equipment.status.toLowerCase();
     if (s.contains("dispose")) return const Color(0xFFEF4444);
     if (s.contains("replace")) return const Color(0xFFEA580C);
-    if (s.contains("maintenance")) return _yellow;
+    if (s.contains("maintenance")) return _accent;
     if (s.contains("borrow")) return const Color(0xFF38BDF8);
     return const Color(0xFF22C55E);
   }
 
   Color _scheduleColor(MaintenanceSchedule s) {
     if (s.isOverdue) return const Color(0xFFEF4444);
-    if (s.isDueSoon) return _yellow;
+    if (s.isDueSoon) return _accent;
     final t = s.status.toLowerCase();
     if (t.contains("completed")) return const Color(0xFF22C55E);
     return _ink;
@@ -281,9 +282,9 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
 
           const SizedBox(height: 18),
 
-          // Black QR hero block (Move tracking-number moment)
+          // QR hero block
           Material(
-            color: _ink,
+            color: _blue,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               onTap: _copyQr,
@@ -566,7 +567,7 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
           child: FilledButton(
             onPressed: _openRecordMaintenance,
             style: FilledButton.styleFrom(
-              backgroundColor: _ink,
+              backgroundColor: _blue,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -576,7 +577,7 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.build_rounded, size: 18, color: _yellow),
+                Icon(Icons.build_rounded, size: 18, color: _accent),
                 SizedBox(width: 10),
                 Text(
                   "Record Fix",
@@ -665,7 +666,7 @@ class _SheetTab extends StatelessWidget {
               height: 2.5,
               width: selected ? 26 : 0,
               decoration: BoxDecoration(
-                color: const Color(0xFFFBBF24),
+                color: const Color(0xFFFFF200),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -727,7 +728,7 @@ class _StatusChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: color == const Color(0xFFFBBF24)
+          color: color == const Color(0xFFFFF200)
               ? const Color(0xFF92400E)
               : color,
           fontSize: compact ? 11 : 12,
