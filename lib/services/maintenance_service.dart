@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart';
 
 import '../models/equipment.dart';
+import '../models/equipment_full_profile.dart';
 import '../models/maintenance_report.dart';
 
 /// Thrown when a scanned QR code has no matching equipment (HTTP 404).
@@ -16,7 +17,7 @@ class EquipmentNotFoundException implements Exception {
 }
 
 class MaintenanceService {
-  static const String baseUrl = "http://192.168.1.4:8000/api";
+  static const String baseUrl = "http://192.168.1.9:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -54,6 +55,24 @@ class MaintenanceService {
     }
 
     throw Exception("Unable to load equipment.");
+  }
+
+  /// GET /maintenance/equipment/{id}/profile
+  Future<EquipmentFullProfile> getEquipmentProfile(int id) async {
+    await _attachToken();
+    final res = await dio.get("$baseUrl/maintenance/equipment/$id/profile");
+    final data = res.data;
+
+    if (res.statusCode == 404 ||
+        (data is Map && data["success"] == false)) {
+      throw const EquipmentNotFoundException();
+    }
+
+    if (res.statusCode == 200 && data is Map && data["equipment"] != null) {
+      return EquipmentFullProfile.fromJson(Map<String, dynamic>.from(data));
+    }
+
+    throw Exception("Unable to load equipment profile.");
   }
 
   /// GET /maintenance/equipments

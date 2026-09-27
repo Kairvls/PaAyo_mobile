@@ -10,7 +10,7 @@ import '../../utils/equipment_icon.dart';
 import '../../widgets/product_list_row.dart';
 import '../../widgets/chart_tooltip.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import '../qr/view_details_sheets.dart';
 
 enum _HistoryChartRange { week, month }
 
@@ -141,11 +141,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _openRecord(MaintenanceRecord record) {
-    return promptScanToManage(
-      context,
-      equipmentName: record.equipmentName,
-      destination: ScanDestination.history,
-    );
+    return showMaintenanceRecordSheet(context, record);
   }
 
   Future<void> _openScanner() {

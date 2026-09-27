@@ -8,7 +8,7 @@ import '../../services/maintenance_service.dart';
 import '../../utils/equipment_icon.dart';
 import '../../widgets/chart_tooltip.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import 'equipment_details_screen.dart';
 
 class EquipmentScreen extends StatefulWidget {
   final String? initialSearch;
@@ -82,10 +82,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   }
 
   Future<void> _open(Equipment equipment) async {
-    await promptScanToManage(
+    await Navigator.push(
       context,
-      equipmentName: equipment.name,
-      destination: ScanDestination.profile,
+      MaterialPageRoute(
+        builder: (_) => EquipmentDetailsScreen(equipment: equipment),
+      ),
     );
   }
 

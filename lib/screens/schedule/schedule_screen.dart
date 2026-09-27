@@ -9,7 +9,7 @@ import '../../services/maintenance_service.dart';
 import '../../widgets/product_list_row.dart';
 import '../../widgets/chart_tooltip.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import '../qr/view_details_sheets.dart';
 
 enum _ScheduleRange { monthly, weekly, today }
 
@@ -67,11 +67,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _open(MaintenanceSchedule schedule) {
-    return promptScanToManage(
-      context,
-      equipmentName: schedule.equipmentName,
-      destination: ScanDestination.schedule,
-    );
+    return showScheduleDetailsSheet(context, schedule);
   }
 
   Future<void> _openScanner() {

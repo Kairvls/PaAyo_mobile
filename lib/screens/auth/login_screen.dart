@@ -442,7 +442,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          "Use your Office 365 account to manage\ncampus equipment and maintenance.",
+                          "Use your *** account to manage\ncampus equipment and maintenance.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14.5,
@@ -514,7 +514,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
               ),
               const SizedBox(height: 14),
-              const Text(
+              /*const Text(
                 "Maintenance Personnel only",
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -522,7 +522,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF94A3B8),
                 ),
-              ),
+              ),*/
             ],
           ),
         ),

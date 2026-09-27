@@ -11,9 +11,10 @@ import '../../services/role_session.dart';
 import '../../utils/equipment_icon.dart';
 import '../../widgets/product_list_row.dart';
 import '../../widgets/chart_tooltip.dart';
+import '../equipment/equipment_details_screen.dart';
 import '../equipment/equipment_screen.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import '../qr/view_details_sheets.dart';
 import '../schedule/schedule_alerts_screen.dart';
 import '../schedule/schedule_screen.dart';
 
@@ -54,7 +55,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
   static const _muted = Color(0xFF64748B);
   static const _blue = Color(0xFF0025CC);
   static const _blueLight = Color(0xFF93C5FD);
-  static const _navy = Color(0xFF0B2F64);
   static const _bg = Colors.white;
   static const _accent = Color(0xFF0B2F64);
 
@@ -273,193 +273,6 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       );
       if (mounted) await _refreshRecent(keepScroll: true);
     }
-  }
-
-  /// Preview full (non-truncated) card info first; scan stays optional CTA.
-  Future<void> _showCardPreview({
-    required String title,
-    required List<({String label, String value})> details,
-    required Color accent,
-    required IconData icon,
-    String? badge,
-    ScanDestination destination = ScanDestination.profile,
-  }) {
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: accent, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: _ink,
-                          height: 1.25,
-                        ),
-                      ),
-                    ),
-                    if (badge != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          badge!,
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: kCardGray,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < details.length; i++) ...[
-                        if (i > 0)
-                          const Divider(height: 1, color: Color(0xFFE8EEF5)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 96,
-                                child: Text(
-                                  details[i].label,
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: _muted,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  details[i].value,
-                                  style: const TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: _ink,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  "To update or manage this unit, scan its QR code on-site.",
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.35,
-                    color: _muted,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _pushAndKeepSearchClosed(
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                QRScannerScreen(destination: destination),
-                          ),
-                        ),
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _navy,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                    label: const Text(
-                      "Open scanner",
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Center(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Close"),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   String get _greeting {
@@ -969,11 +782,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   ]),
                   value: DateFormat("MMM d").format(r.date.toLocal()),
                   status: r.status,
-                  onTap: () => promptScanToManage(
-                    context,
-                    equipmentName: r.equipmentName,
-                    destination: ScanDestination.history,
-                  ),
+                  onTap: () => showMaintenanceRecordSheet(context, r),
                 ),
           ],
         );
@@ -1362,35 +1171,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   actionLabel: "View",
                   showDivider: i < overduePreview.length - 1,
                   padding: const EdgeInsets.fromLTRB(0, 12, 4, 12),
-                  onTap: () {
-                    final s = overduePreview[i];
-                    _showCardPreview(
-                      title: s.title,
-                      accent: const Color(0xFFEF4444),
-                      icon: Icons.hourglass_bottom_rounded,
-                      badge: s.relativeDueLabel,
-                      destination: ScanDestination.schedule,
-                      details: [
-                        (
-                          label: "Equipment",
-                          value: s.equipmentName ?? "Equipment",
-                        ),
-                        if (s.room != null &&
-                            s.room!.trim().isNotEmpty &&
-                            s.room != "—")
-                          (label: "Room", value: s.room!),
-                        if (s.nextDate != null)
-                          (
-                            label: "Next due",
-                            value: dateFmt.format(s.nextDate!),
-                          ),
-                        (label: "Status", value: s.urgencyLabel),
-                        if (s.frequency.trim().isNotEmpty &&
-                            s.frequency != "—")
-                          (label: "Frequency", value: s.frequency),
-                      ],
-                    );
-                  },
+                  onTap: () =>
+                      showScheduleDetailsSheet(context, overduePreview[i]),
                 ),
             ],
             if (dueSoonPreview.isNotEmpty) ...[
@@ -1437,35 +1219,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   actionLabel: "View",
                   showDivider: i < dueSoonPreview.length - 1,
                   padding: const EdgeInsets.fromLTRB(0, 12, 4, 12),
-                  onTap: () {
-                    final s = dueSoonPreview[i];
-                    _showCardPreview(
-                      title: s.title,
-                      accent: const Color(0xFFF59E0B),
-                      icon: Icons.schedule_rounded,
-                      badge: s.relativeDueLabel,
-                      destination: ScanDestination.schedule,
-                      details: [
-                        (
-                          label: "Equipment",
-                          value: s.equipmentName ?? "Equipment",
-                        ),
-                        if (s.room != null &&
-                            s.room!.trim().isNotEmpty &&
-                            s.room != "—")
-                          (label: "Room", value: s.room!),
-                        if (s.nextDate != null)
-                          (
-                            label: "Next due",
-                            value: dateFmt.format(s.nextDate!),
-                          ),
-                        (label: "Status", value: s.urgencyLabel),
-                        if (s.frequency.trim().isNotEmpty &&
-                            s.frequency != "—")
-                          (label: "Frequency", value: s.frequency),
-                      ],
-                    );
-                  },
+                  onTap: () =>
+                      showScheduleDetailsSheet(context, dueSoonPreview[i]),
                 ),
             ],
             if (recent.attentionEquipment.isNotEmpty ||
@@ -1531,26 +1286,15 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                                     : "Equipment"),
                             badge: items[i].status,
                             badgeTone: _ActivityBadgeTone.alert,
-                            onTap: () => _showCardPreview(
-                              title: items[i].name,
-                              accent: const Color(0xFFEA580C),
-                              icon: Icons.warning_amber_rounded,
-                              details: [
-                                (label: "Room", value: items[i].room),
-                                (label: "Status", value: items[i].status),
-                                if (items[i].category.trim().isNotEmpty &&
-                                    items[i].category != "—")
-                                  (
-                                    label: "Category",
-                                    value: items[i].category,
+                            onTap: () => _pushAndKeepSearchClosed(
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EquipmentDetailsScreen(
+                                    equipment: items[i],
                                   ),
-                                if (items[i].condition.trim().isNotEmpty &&
-                                    items[i].condition != "—")
-                                  (
-                                    label: "Condition",
-                                    value: items[i].condition,
-                                  ),
-                              ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -1588,40 +1332,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                           ].join(" · "),
                           badge: items[i].status,
                           badgeTone: _ActivityBadgeTone.ok,
-                          onTap: () => _showCardPreview(
-                            title: items[i].equipmentName ?? "Equipment",
-                            accent: const Color(0xFFEA580C),
-                            icon: Icons.build_rounded,
-                            destination: ScanDestination.history,
-                            details: [
-                              if (items[i].room != null &&
-                                  items[i].room!.trim().isNotEmpty &&
-                                  items[i].room != "—")
-                                (label: "Room", value: items[i].room!),
-                              (label: "Status", value: items[i].status),
-                              (
-                                label: "Date",
-                                value: dateFmt.format(items[i].date.toLocal()),
-                              ),
-                              if (items[i].personnel.trim().isNotEmpty)
-                                (
-                                  label: "Personnel",
-                                  value: items[i].personnel,
-                                ),
-                              if (items[i].findings != null &&
-                                  items[i].findings!.trim().isNotEmpty)
-                                (
-                                  label: "Findings",
-                                  value: items[i].findings!,
-                                ),
-                              if (items[i].repairAction != null &&
-                                  items[i].repairAction!.trim().isNotEmpty)
-                                (
-                                  label: "Repair",
-                                  value: items[i].repairAction!,
-                                ),
-                            ],
-                          ),
+                          onTap: () =>
+                              showMaintenanceRecordSheet(context, items[i]),
                         ),
                       ],
                     ],

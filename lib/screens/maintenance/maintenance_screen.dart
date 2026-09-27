@@ -8,7 +8,7 @@ import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../../utils/equipment_icon.dart';
 import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import '../qr/view_details_sheets.dart';
 
 enum _FixPeriod { thisWeek, lastWeek, all }
 
@@ -200,10 +200,11 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   }
 
   Future<void> _openRecord(MaintenanceRecord record) {
-    return promptScanToManage(
+    return showMaintenanceRecordSheet(
       context,
-      equipmentName: record.equipmentName,
+      record,
       destination: ScanDestination.record,
+      scanLabel: "Scan to record fix",
     );
   }
 

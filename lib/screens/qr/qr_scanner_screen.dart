@@ -20,10 +20,19 @@ class QRScannerScreen extends StatefulWidget {
   final int? campaignId;
   final List<String> conditions;
 
+  /// When set, only the QR of this exact unit is accepted. Opened from a
+  /// specific equipment; the general scan buttons leave these null.
+  final int? expectedEquipmentId;
+  final String? expectedEquipmentName;
+  final String? expectedQr;
+
   const QRScannerScreen({
     super.key,
     this.destination = ScanDestination.profile,
     this.campaignId,
+    this.expectedEquipmentId,
+    this.expectedEquipmentName,
+    this.expectedQr,
     this.conditions = const [
       "OK",
       "Malfunctioning",
@@ -54,6 +63,23 @@ class _QRScannerScreenState extends State<QRScannerScreen>
   bool _handling = false;
   int _missCount = 0;
   String? _lastMissedCode;
+
+  bool get _locked =>
+      widget.expectedEquipmentId != null ||
+      (widget.expectedQr?.trim().isNotEmpty ?? false);
+
+  String get _targetName {
+    final n = widget.expectedEquipmentName?.trim();
+    return (n == null || n.isEmpty) ? "this equipment" : n;
+  }
+
+  bool _isExpected(Equipment equipment) {
+    if (widget.expectedEquipmentId != null) {
+      return equipment.id == widget.expectedEquipmentId;
+    }
+    return equipment.qrId.trim().toLowerCase() ==
+        widget.expectedQr!.trim().toLowerCase();
+  }
 
   @override
   void initState() {
@@ -119,6 +145,16 @@ class _QRScannerScreenState extends State<QRScannerScreen>
       return;
     }
 
+    if (_locked && !_isExpected(equipment)) {
+      _lastMissedCode = code;
+      final where = equipment.room == "—" ? "" : " in ${equipment.room}";
+      await _resumeWithMessage(
+        "Wrong equipment: that QR belongs to ${equipment.name}$where. "
+        "Scan the QR on $_targetName.",
+      );
+      return;
+    }
+
     // Successful match — reset miss tracking.
     _missCount = 0;
     _lastMissedCode = null;
@@ -134,8 +170,14 @@ class _QRScannerScreenState extends State<QRScannerScreen>
       MaterialPageRoute(builder: (_) => _screenFor(equipment)),
     );
 
-    // Resume scanning when the user comes back.
     if (!mounted) return;
+    // A targeted scan is one-shot: return to the page it was opened from.
+    if (_locked) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Resume scanning when the user comes back.
     setState(() => _phase = _ScanPhase.scanning);
     _handling = false;
     await _controller.start();
@@ -353,9 +395,9 @@ class _QRScannerScreenState extends State<QRScannerScreen>
                     icon: Icons.arrow_back_rounded,
                     onTap: () => Navigator.of(context).maybePop(),
                   ),
-                  const Text(
-                    "Scan Equipment",
-                    style: TextStyle(
+                  Text(
+                    _locked ? "Verify Equipment" : "Scan Equipment",
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -397,9 +439,9 @@ class _QRScannerScreenState extends State<QRScannerScreen>
                               ),
                             ),
                             const SizedBox(height: 14),
-                            const Text(
-                              "Equipment Found",
-                              style: TextStyle(
+                            Text(
+                              _locked ? "Match confirmed" : "Equipment Found",
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -407,29 +449,42 @@ class _QRScannerScreenState extends State<QRScannerScreen>
                             ),
                           ],
                         )
-                      : Column(
+                      : Padding(
                           key: const ValueKey("scanning"),
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            _PulsingDot(),
-                            SizedBox(height: 12),
-                            Text(
-                              "Scanning…",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_locked) ...[
+                                _TargetPill(
+                                  name: _targetName,
+                                  qr: widget.expectedQr,
+                                ),
+                                const SizedBox(height: 18),
+                              ],
+                              const _PulsingDot(),
+                              const SizedBox(height: 12),
+                              const Text(
+                                "Scanning…",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              "Point the camera at the equipment QR code",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                              const SizedBox(height: 6),
+                              Text(
+                                _locked
+                                    ? "Only the QR on this unit will be accepted"
+                                    : "Point the camera at the equipment QR code",
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                 ),
               ),
@@ -531,6 +586,69 @@ class _ScannerOverlay extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _TargetPill extends StatelessWidget {
+  final String name;
+  final String? qr;
+
+  const _TargetPill({required this.name, this.qr});
+
+  @override
+  Widget build(BuildContext context) {
+    final code = qr?.trim();
+    final showQr = code != null && code.isNotEmpty && code != "—";
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.gps_fixed_rounded,
+            color: Color(0xFFFFF200),
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (showQr)
+                  Text(
+                    code,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

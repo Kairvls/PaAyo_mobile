@@ -7,8 +7,7 @@ import 'package:intl/intl.dart';
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../../widgets/chart_tooltip.dart';
-import '../qr/qr_scanner_screen.dart';
-import '../qr/scan_to_manage.dart';
+import '../qr/view_details_sheets.dart';
 
 enum ScheduleAlertFilter { all, dueSoon, overdue }
 
@@ -132,11 +131,7 @@ class _ScheduleAlertsScreenState extends State<ScheduleAlertsScreen> {
   }
 
   Future<void> _open(MaintenanceSchedule schedule) {
-    return promptScanToManage(
-      context,
-      equipmentName: schedule.equipmentName,
-      destination: ScanDestination.schedule,
-    );
+    return showScheduleDetailsSheet(context, schedule);
   }
 
   /// Builds 4 time buckets with overdue / due-soon / other counts.

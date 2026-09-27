@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/equipment.dart';
+import '../../models/equipment_full_profile.dart';
 import '../../services/maintenance_service.dart';
+import '../../widgets/equipment_full_profile_view.dart';
 import '../history/equipment_history_screen.dart';
 import '../maintenance/record_maintenance_screen.dart';
 import '../schedule/equipment_schedule_screen.dart';
@@ -29,14 +31,22 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
 
   final MaintenanceService _service = MaintenanceService();
   late Equipment _equipment = widget.equipment;
-  int _tab = 0; // 0 Overview, 1 Specs — primary scan payoff
+  int _tab = 0; // 0 Overview, 1 Details, 2 Lifecycle
   List<MaintenanceSchedule>? _schedules;
   bool _loadingSchedules = true;
+  late Future<EquipmentFullProfile> _profileFuture;
 
   @override
   void initState() {
     super.initState();
+    _profileFuture = _service.getEquipmentProfile(_equipment.id);
     _loadSchedules();
+  }
+
+  void _reloadProfile() {
+    setState(() {
+      _profileFuture = _service.getEquipmentProfile(_equipment.id);
+    });
   }
 
   Color get _statusColor {
@@ -79,6 +89,8 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
       final fresh = await _service.getEquipmentByQr(_equipment.qrId);
       if (mounted) setState(() => _equipment = fresh);
     } catch (_) {}
+    if (!mounted) return;
+    _reloadProfile();
     await _loadSchedules();
   }
 
@@ -99,7 +111,10 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
         builder: (_) => EditEquipmentScreen(equipment: _equipment),
       ),
     );
-    if (updated != null && mounted) setState(() => _equipment = updated);
+    if (updated != null && mounted) {
+      setState(() => _equipment = updated);
+      _reloadProfile();
+    }
   }
 
   Future<void> _openSchedule() async {
@@ -350,17 +365,23 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
               ),
               const SizedBox(width: 18),
               _SheetTab(
-                label: "Specifications",
+                label: "Details",
                 selected: _tab == 1,
                 onTap: () => setState(() => _tab = 1),
+              ),
+              const SizedBox(width: 18),
+              _SheetTab(
+                label: "Lifecycle",
+                selected: _tab == 2,
+                onTap: () => setState(() => _tab = 2),
               ),
             ],
           ),
           const Divider(height: 1, color: _line),
-          const SizedBox(height: 4),
+          SizedBox(height: _tab == 0 ? 4 : 16),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
-            child: _tab == 0 ? _buildOverview() : _buildSpecs(),
+            child: _tab == 0 ? _buildOverview() : _buildFullProfile(),
           ),
 
           const SizedBox(height: 12),
@@ -609,22 +630,56 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
     );
   }
 
-  /// Full inventory / technical fields after scan.
-  Widget _buildSpecs() {
-    return Column(
-      key: const ValueKey("specs"),
-      children: [
-        _Kv(label: "QR ID", value: _equipment.qrId),
-        _Kv(label: "Asset tag", value: _equipment.assetTag),
-        _Kv(label: "Brand", value: _equipment.brand),
-        _Kv(label: "Model", value: _equipment.model),
-        _Kv(label: "Serial", value: _equipment.serial),
-        _Kv(label: "Room", value: _equipment.room),
-        _Kv(label: "Category", value: _equipment.category),
-        _Kv(label: "Condition", value: _equipment.condition),
-        _Kv(label: "Status", value: _equipment.status),
-        _Kv(label: "Warranty", value: _equipment.warranty),
-      ],
+  Widget _buildFullProfile() {
+    return FutureBuilder<EquipmentFullProfile>(
+      key: ValueKey("profile-$_tab"),
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: _blue,
+                ),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              children: [
+                const Text(
+                  "Couldn't load the full profile.",
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _reloadProfile,
+                  style: TextButton.styleFrom(foregroundColor: _blue),
+                  child: const Text(
+                    "Try again",
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        final profile = snapshot.data!;
+        return _tab == 1
+            ? EquipmentOverviewSections(profile: profile)
+            : EquipmentLifecycleSections(profile: profile);
+      },
     );
   }
 }

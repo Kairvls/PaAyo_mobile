@@ -31,6 +31,8 @@ enum _EquipmentItemType { listed, manual }
 class _ReportEquipmentItem {
   final _EquipmentItemType type;
   final int? id;
+  final int roomId;
+  final String locationLabel;
   final String displayLabel;
   final String issue;
   final String? manualName;
@@ -40,6 +42,8 @@ class _ReportEquipmentItem {
 
   const _ReportEquipmentItem({
     required this.type,
+    required this.roomId,
+    required this.locationLabel,
     required this.displayLabel,
     required this.issue,
     this.id,
@@ -187,9 +191,9 @@ class _ReportScreenState extends State<ReportScreen> {
     if (brandModel.isNotEmpty) parts.add(brandModel);
     if (zone.isNotEmpty) parts.add(zone);
 
-    final id = map["equipment_id"];
-    if (parts.isEmpty && id != null) {
-      parts.add("#$id");
+    final code = _equipmentCode(map["equipment_id"]);
+    if (parts.isEmpty && code != null) {
+      parts.add(code);
     }
 
     final openReportTicket = _openReportTicketOf(map);
@@ -198,6 +202,12 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     return parts.isEmpty ? name : "$name · ${parts.join(" · ")}";
+  }
+
+  String? _equipmentCode(dynamic rawId) {
+    final id = int.tryParse(rawId?.toString() ?? "");
+    if (id == null) return null;
+    return "EQ-${id.toString().padLeft(6, "0")}";
   }
 
   int? _equipmentIdOf(dynamic item) {
@@ -254,7 +264,7 @@ class _ReportScreenState extends State<ReportScreen> {
       add("Brand", map["equipment_brand_name"]);
       add("Model", map["equipment_model"]);
       add("Placement zone", map["equipment_placement_zone"]);
-      add("Equipment ID", map["equipment_id"]);
+      add("Equipment ID", _equipmentCode(map["equipment_id"]));
       add("Open report", map["open_report_ticket_code"]);
       add("Report status", map["open_report_status"]);
     }
@@ -715,7 +725,6 @@ class _ReportScreenState extends State<ReportScreen> {
                               selectedSuggestedIssueName = null;
                               suggestedIssues.clear();
                               equipmentController.clear();
-                              selectedItems.clear();
                               itemsError = null;
                             });
                             if (selectedRoomId != null) {
@@ -970,6 +979,36 @@ class _ReportScreenState extends State<ReportScreen> {
                                                   color: _ink,
                                                 ),
                                               ),
+                                              if (item.locationLabel
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons
+                                                          .location_on_outlined,
+                                                      size: 13,
+                                                      color: _blue,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        item.locationLabel,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style:
+                                                            const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: _blue,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                               const SizedBox(height: 4),
                                               Text(
                                                 "Issue: ${item.issue}",
@@ -985,7 +1024,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                                   .isNotEmpty) ...[
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  "Open report ${item.openReportTicket} — submit will add your update there.",
+                                                  "Already reported in ${item.openReportTicket} — maintenance will see it flagged as priority.",
                                                   maxLines: 2,
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -1783,6 +1822,8 @@ class _ReportScreenState extends State<ReportScreen> {
         selectedItems.add(
           _ReportEquipmentItem(
             type: _EquipmentItemType.manual,
+            roomId: selectedRoomId!,
+            locationLabel: selectedLocation ?? "",
             displayLabel: name,
             manualName: name,
             issue: issue,
@@ -1834,6 +1875,8 @@ class _ReportScreenState extends State<ReportScreen> {
       selectedItems.add(
         _ReportEquipmentItem(
           type: _EquipmentItemType.listed,
+          roomId: selectedRoomId!,
+          locationLabel: selectedLocation ?? "",
           id: selectedEquipmentId,
           displayLabel: selectedEquipmentLabel!,
           issue: issue,
@@ -2110,23 +2153,40 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  Map<int, List<_ReportEquipmentItem>> _itemsByRoom() {
+    final groups = <int, List<_ReportEquipmentItem>>{};
+    for (final item in selectedItems) {
+      groups.putIfAbsent(item.roomId, () => []).add(item);
+    }
+    return groups;
+  }
+
   String _submitConfirmMessage() {
     final openReportItems = selectedItems
         .where((item) => (item.openReportTicket ?? "").isNotEmpty)
         .length;
+    final locationCount = _itemsByRoom().length;
     if (selectedItems.length > 1) {
-      if (openReportItems > 0) {
-        return "Submit ${selectedItems.length} equipment items? "
-            "$openReportItems already have open reports and your updates will be merged there.";
+      final scope = locationCount > 1
+          ? "as $locationCount location reports"
+          : "in one maintenance report";
+      if (openReportItems == selectedItems.length) {
+        return "Submit ${selectedItems.length} equipment items $scope? "
+            "All of them were already reported, so maintenance will see them flagged as priority.";
       }
-      return "Submit ${selectedItems.length} equipment items in one maintenance report?";
+      if (openReportItems > 0) {
+        return "Submit ${selectedItems.length} equipment items $scope? "
+            "$openReportItems ${openReportItems == 1 ? "was" : "were"} already reported "
+            "and will be flagged as priority.";
+      }
+      return "Submit ${selectedItems.length} equipment items $scope?";
     }
     final ticket = selectedItems
         .map((item) => item.openReportTicket)
         .firstWhere((ticket) => (ticket ?? "").isNotEmpty, orElse: () => null);
     if (ticket != null) {
-      return "This equipment already has open report $ticket. "
-          "Your update will be added to that ticket.";
+      return "This equipment was already reported in $ticket. "
+          "Maintenance will see it flagged as priority.";
     }
     return "Send this maintenance report now?";
   }
@@ -2149,60 +2209,89 @@ class _ReportScreenState extends State<ReportScreen> {
               isSending = true;
               setDialogState(() => phase = "submitting");
 
-              try {
-                final listed = selectedItems
-                    .where((e) => e.type == _EquipmentItemType.listed)
-                    .toList();
-                final manuals = selectedItems
-                    .where((e) => e.type == _EquipmentItemType.manual)
-                    .toList();
+              final groups = _itemsByRoom();
+              var submittedGroups = 0;
 
+              void dropSubmittedGroups() {
+                if (submittedGroups == 0 || !mounted) return;
+                final doneRooms =
+                    groups.keys.take(submittedGroups).toSet();
+                setState(() {
+                  selectedItems
+                      .removeWhere((e) => doneRooms.contains(e.roomId));
+                });
+              }
+
+              String partialNote() {
+                if (submittedGroups == 0) return "";
+                return " Some locations were saved already. "
+                    "Remaining items are still in your list.";
+              }
+
+              try {
                 String? preferred;
                 if (priority == "Non-Urgent" && preferredActionDate != null) {
                   preferred = DateFormat("yyyy-MM-dd")
                       .format(preferredActionDate!);
                 }
 
-                final response = await api.submitReport(
-                  employeeId: employeeIdController.text.trim(),
-                  roomId: selectedRoomId!,
-                  equipmentIds: listed.map((e) => e.id!).toList(),
-                  equipmentIssues: listed.map((e) => e.issue).toList(),
-                  manualEquipmentNames:
-                      manuals.map((e) => e.manualName!).toList(),
-                  manualEquipmentIssues: manuals.map((e) => e.issue).toList(),
-                  priority: priority,
-                  preferredActionDate: preferred,
-                  photo: selectedImage,
-                );
+                final totalItems = selectedItems.length;
+                String? lastServerMessage;
+                final reportIds = <String>[];
 
-                if (!dialogContext.mounted) return;
+                for (final entry in groups.entries) {
+                  final listed = entry.value
+                      .where((e) => e.type == _EquipmentItemType.listed)
+                      .toList();
+                  final manuals = entry.value
+                      .where((e) => e.type == _EquipmentItemType.manual)
+                      .toList();
 
-                final data = response.data;
-                if (response.statusCode != null &&
-                    response.statusCode! >= 400) {
-                  errorMessage = data is Map
-                      ? (data["message"]?.toString() ?? errorMessage)
-                      : errorMessage;
-                  isSending = false;
-                  setDialogState(() => phase = "error");
-                  return;
+                  final response = await api.submitReport(
+                    employeeId: employeeIdController.text.trim(),
+                    roomId: entry.key,
+                    equipmentIds: listed.map((e) => e.id!).toList(),
+                    equipmentIssues: listed.map((e) => e.issue).toList(),
+                    manualEquipmentNames:
+                        manuals.map((e) => e.manualName!).toList(),
+                    manualEquipmentIssues:
+                        manuals.map((e) => e.issue).toList(),
+                    priority: priority,
+                    preferredActionDate: preferred,
+                    photo: selectedImage,
+                  );
+
+                  if (!dialogContext.mounted) return;
+
+                  final data = response.data;
+                  if (response.statusCode != null &&
+                      response.statusCode! >= 400) {
+                    final serverMessage = data is Map
+                        ? (data["message"]?.toString() ?? errorMessage)
+                        : errorMessage;
+                    errorMessage = "$serverMessage${partialNote()}";
+                    dropSubmittedGroups();
+                    isSending = false;
+                    setDialogState(() => phase = "error");
+                    return;
+                  }
+
+                  if (data is Map) {
+                    lastServerMessage = data["message"]?.toString();
+                    final reportId = data["report_id"]?.toString() ?? "";
+                    if (reportId.isNotEmpty) reportIds.add("#$reportId");
+                  }
+                  submittedGroups++;
                 }
 
-                if (data is Map) {
-                  if (data["merged"] == true) {
-                    successMessage = data["message"]?.toString() ??
-                        "Your update was added to the existing open report.";
-                  } else if (selectedItems.length > 1) {
-                    successMessage = data["message"]?.toString() ??
-                        "Your report with ${selectedItems.length} equipment items was sent successfully.";
-                  } else {
-                    successMessage = data["message"]?.toString() ??
-                        successMessage;
-                  }
-                } else if (selectedItems.length > 1) {
+                if (groups.length > 1) {
+                  successMessage = "Submitted ${groups.length} location reports"
+                      "${reportIds.isEmpty ? "" : " (${reportIds.join(", ")})"}.";
+                } else if (lastServerMessage != null) {
+                  successMessage = lastServerMessage;
+                } else if (totalItems > 1) {
                   successMessage =
-                      "Your report with ${selectedItems.length} equipment items was sent successfully.";
+                      "Your report with $totalItems equipment items was sent successfully.";
                 }
 
                 setDialogState(() => phase = "success");
@@ -2240,6 +2329,8 @@ class _ReportScreenState extends State<ReportScreen> {
                   }
                 }
 
+                errorMessage = "$errorMessage${partialNote()}";
+                dropSubmittedGroups();
                 if (!dialogContext.mounted) return;
                 isSending = false;
                 setDialogState(() => phase = "error");
@@ -2566,7 +2657,7 @@ class _ReportScreenState extends State<ReportScreen> {
       hasError = true;
     }
 
-    if (selectedRoomId == null) {
+    if (selectedItems.isEmpty && selectedRoomId == null) {
       locationError = "Please select a location.";
       firstErrorKey ??= locationKey;
       hasError = true;
