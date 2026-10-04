@@ -4,7 +4,7 @@ import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.1.9:8000/api";
+  static const String baseUrl = "http://192.168.1.13:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -72,6 +72,47 @@ class ApiService {
     return [];
   }
 
+  /// Resolves a scanned equipment QR for the reporter flow.
+  /// Returns `{success: true, equipment: {...}}` or
+  /// `{success: false, message: "..."}`; never throws for 4xx responses.
+  Future<Map<String, dynamic>> getReportEquipmentByQr(String qr) async {
+    try {
+      final response = await dio.get(
+        "$baseUrl/report-equipment/qr/${Uri.encodeComponent(qr.trim())}",
+        options: Options(validateStatus: (s) => s != null && s < 500),
+      );
+      final data = response.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return {"success": false, "message": "Unexpected server response."};
+    } catch (_) {
+      return {
+        "success": false,
+        "message": "Couldn't reach the server. Check your connection.",
+      };
+    }
+  }
+
+  /// Reportable equipment issued to this reporter through property assignment.
+  Future<List<Map<String, dynamic>>> getAssignedEquipment(
+    String employeeId,
+  ) async {
+    try {
+      final response = await dio.get(
+        "$baseUrl/reporter/${Uri.encodeComponent(employeeId.trim())}/assigned-equipment",
+        options: Options(validateStatus: (s) => s != null && s < 500),
+      );
+      final data = response.data;
+      if (response.statusCode == 200 && data is List) {
+        return data
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
   Future<List<dynamic>> getSuggestedIssues(
     int equipmentId,
   ) async {
@@ -112,27 +153,21 @@ class ApiService {
     required int roomId,
     List<int> equipmentIds = const [],
     List<String> equipmentIssues = const [],
+    List<String> equipmentDetails = const [],
     List<String> manualEquipmentNames = const [],
     List<String> manualEquipmentIssues = const [],
+    List<String> manualEquipmentDetails = const [],
+    List<int?> manualEquipmentRooms = const [],
     String? description,
-    required String priority,
-    String? preferredActionDate,
-    File? photo,
+    Map<int, File> equipmentPhotos = const {},
+    List<File?> manualEquipmentPhotos = const [],
   }) async {
     final formData = FormData();
 
     formData.fields.add(MapEntry("employee_id", employeeId));
     formData.fields.add(MapEntry("room_id", roomId.toString()));
-    formData.fields.add(MapEntry("priority", priority));
-
     if (description != null && description.trim().isNotEmpty) {
       formData.fields.add(MapEntry("description", description.trim()));
-    }
-
-    if (preferredActionDate != null && preferredActionDate.isNotEmpty) {
-      formData.fields.add(
-        MapEntry("preferred_action_date", preferredActionDate),
-      );
     }
 
     for (final id in equipmentIds) {
@@ -151,13 +186,43 @@ class ApiService {
       formData.fields.add(MapEntry("manual_equipment_issues[]", issue));
     }
 
-    if (photo != null) {
+    for (final details in equipmentDetails) {
+      formData.fields.add(MapEntry("equipment_details[]", details));
+    }
+
+    for (final details in manualEquipmentDetails) {
+      formData.fields.add(MapEntry("manual_equipment_details[]", details));
+    }
+
+    for (final room in manualEquipmentRooms) {
+      formData.fields.add(
+        MapEntry("manual_equipment_rooms[]", room?.toString() ?? ""),
+      );
+    }
+
+    // One optional photo per item: listed items keyed by equipment id,
+    // manual items keyed by their position in manual_equipment_names.
+    for (final entry in equipmentPhotos.entries) {
       formData.files.add(
         MapEntry(
-          "photo",
+          "equipment_photos[${entry.key}]",
           await MultipartFile.fromFile(
-            photo.path,
-            filename: basename(photo.path),
+            entry.value.path,
+            filename: basename(entry.value.path),
+          ),
+        ),
+      );
+    }
+
+    for (var i = 0; i < manualEquipmentPhotos.length; i++) {
+      final file = manualEquipmentPhotos[i];
+      if (file == null) continue;
+      formData.files.add(
+        MapEntry(
+          "manual_equipment_photos[$i]",
+          await MultipartFile.fromFile(
+            file.path,
+            filename: basename(file.path),
           ),
         ),
       );

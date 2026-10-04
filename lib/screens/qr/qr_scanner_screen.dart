@@ -26,6 +26,11 @@ class QRScannerScreen extends StatefulWidget {
   final String? expectedEquipmentName;
   final String? expectedQr;
 
+  /// Pick mode: the caller validates the raw code. Return an error message
+  /// to keep scanning, or null to accept — the scanner then pops with `true`.
+  final Future<String?> Function(String code)? onCodeScanned;
+  final String? hint;
+
   const QRScannerScreen({
     super.key,
     this.destination = ScanDestination.profile,
@@ -33,6 +38,8 @@ class QRScannerScreen extends StatefulWidget {
     this.expectedEquipmentId,
     this.expectedEquipmentName,
     this.expectedQr,
+    this.onCodeScanned,
+    this.hint,
     this.conditions = const [
       "OK",
       "Malfunctioning",
@@ -110,6 +117,11 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     _handling = true;
     await _controller.stop();
 
+    if (widget.onCodeScanned != null) {
+      await _handlePickScan(code);
+      return;
+    }
+
     if (widget.destination == ScanDestination.semesterInspect) {
       await _handleSemesterScan(code);
       return;
@@ -181,6 +193,23 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     setState(() => _phase = _ScanPhase.scanning);
     _handling = false;
     await _controller.start();
+  }
+
+  Future<void> _handlePickScan(String code) async {
+    final error = await widget.onCodeScanned!(code);
+    if (!mounted) return;
+
+    if (error != null) {
+      _lastMissedCode = code;
+      await _resumeWithMessage(error);
+      return;
+    }
+
+    _lastMissedCode = null;
+    setState(() => _phase = _ScanPhase.found);
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _handleSemesterScan(String code) async {
@@ -474,9 +503,10 @@ class _QRScannerScreenState extends State<QRScannerScreen>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                _locked
-                                    ? "Only the QR on this unit will be accepted"
-                                    : "Point the camera at the equipment QR code",
+                                widget.hint ??
+                                    (_locked
+                                        ? "Only the QR on this unit will be accepted"
+                                        : "Point the camera at the equipment QR code"),
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white70,

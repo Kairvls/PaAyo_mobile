@@ -17,7 +17,7 @@ class EquipmentNotFoundException implements Exception {
 }
 
 class MaintenanceService {
-  static const String baseUrl = "http://192.168.1.9:8000/api";
+  static const String baseUrl = "http://192.168.1.13:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
+import '../qr/qr_scanner_screen.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
-import 'package:intl/intl.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../widgets/coach_tour.dart';
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
 
@@ -14,19 +15,22 @@ class ReportScreen extends StatefulWidget {
   State<ReportScreen> createState() => _ReportScreenState();
 }
 
-class PriorityOption {
-  final String label;
-  final String value;
-  final String description;
-
-  const PriorityOption({
-    required this.label,
-    required this.value,
-    required this.description,
-  });
-}
-
 enum _EquipmentItemType { listed, manual }
+
+/// Uppercases as the user types, keeping the cursor where it was.
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  const _UpperCaseTextFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final upper = newValue.text.toUpperCase();
+    if (upper == newValue.text) return newValue;
+    return newValue.copyWith(text: upper);
+  }
+}
 
 class _ReportEquipmentItem {
   final _EquipmentItemType type;
@@ -34,18 +38,24 @@ class _ReportEquipmentItem {
   final int roomId;
   final String locationLabel;
   final String displayLabel;
+  /// Picked suggested issue; empty means the problem is only in [problemDetails] ("Other").
   final String issue;
+  final String problemDetails;
   final String? manualName;
   final String? openReportTicket;
   /// Raw equipment fields for uniqueness details (long-press).
   final Map<String, dynamic>? details;
 
-  const _ReportEquipmentItem({
+  /// Optional proof photo for this item (one per item, like the web).
+  File? photo;
+
+  _ReportEquipmentItem({
     required this.type,
     required this.roomId,
     required this.locationLabel,
     required this.displayLabel,
     required this.issue,
+    this.problemDetails = "",
     this.id,
     this.manualName,
     this.openReportTicket,
@@ -68,9 +78,6 @@ class _ReportScreenState extends State<ReportScreen> {
   static const _radius = 16.0;
   static const _radiusSm = 12.0;
 
-  static const int _preferredDateMinDaysAhead = 2;
-  static const int _nonUrgentReminderGraceDays = 3;
-
   Timer? _issueSearchTimer;
   Timer? _locationSearchTimer;
   Timer? _equipmentSearchTimer;
@@ -82,13 +89,9 @@ class _ReportScreenState extends State<ReportScreen> {
   String reporterName = "";
   final ApiService api = ApiService();
   Timer? _verifyTimer;
-  Timer? _employeeIdCapsTimer;
-  bool _skipEmployeeIdCapsSchedule = false;
   bool isCheckingReporter = false;
   String? reporterError;
   bool equipmentNotListed = false;
-  String priority = "Non-Urgent";
-  DateTime? preferredActionDate;
 
   List<dynamic> suggestedIssues = [];
   int? selectedSuggestedIssueId;
@@ -106,27 +109,14 @@ class _ReportScreenState extends State<ReportScreen> {
 
   final List<_ReportEquipmentItem> selectedItems = [];
 
-  final List<PriorityOption> priorities = const [
-    PriorityOption(
-      label: "Non-Urgent",
-      value: "Non-Urgent",
-      description: "Minor issue or repair concern",
-    ),
-    PriorityOption(
-      label: "Urgent",
-      value: "Urgent",
-      description: "Immediate maintenance required",
-    ),
-  ];
-
-  File? selectedImage;
+  /// Equipment issued to the verified reporter (property assignment).
+  List<Map<String, dynamic>> assignedEquipment = [];
 
   String? employeeIdError;
   String? locationError;
   String? equipmentError;
   String? issueError;
   String? descriptionError;
-  String? preferredDateError;
   String? itemsError;
 
   final employeeKey = GlobalKey();
@@ -135,7 +125,17 @@ class _ReportScreenState extends State<ReportScreen> {
   final issueKey = GlobalKey();
   final descriptionKey = GlobalKey();
   final itemsKey = GlobalKey();
-  final preferredDateKey = GlobalKey();
+  final assignedKey = GlobalKey();
+  final scanKey = GlobalKey();
+  final notListedKey = GlobalKey();
+  final addKey = GlobalKey();
+  final submitKey = GlobalKey();
+
+  static const _tourSeenPref = "report_tour_seen";
+  static const _tourBannerHiddenPref = "report_tour_banner_hidden";
+
+  /// Top "how to report" banner; stays until the tour is finished or dismissed.
+  bool showTourBanner = false;
 
   final ScrollController scrollController = ScrollController();
 
@@ -143,13 +143,102 @@ class _ReportScreenState extends State<ReportScreen> {
   void initState() {
     super.initState();
     loadRooms();
+    _initTour();
   }
 
-  DateTime get _earliestPreferredDate {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day)
-        .add(const Duration(days: _preferredDateMinDaysAhead));
+  Future<void> _initTour() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      showTourBanner = !(prefs.getBool(_tourBannerHiddenPref) ?? false);
+    });
+    if (prefs.getBool(_tourSeenPref) ?? false) return;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    await startTour();
   }
+
+  Future<void> _hideTourBanner() async {
+    setState(() => showTourBanner = false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_tourBannerHiddenPref, true);
+  }
+
+  Future<void> startTour() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final finished = await CoachTour.show(context, _tourSteps());
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_tourSeenPref, true);
+    if (finished && mounted) await _hideTourBanner();
+    if (mounted && scrollController.hasClients) {
+      scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  List<CoachStep> _tourSteps() => [
+        CoachStep(
+          targetKey: employeeKey,
+          title: "Enter your Employee ID",
+          body: "Start here. Your name shows up once your ID is recognized.",
+        ),
+        CoachStep(
+          targetKey: assignedKey,
+          title: "Your assigned equipment",
+          body:
+              "These are issued to you. Tap one to fill in its location and equipment.",
+        ),
+        CoachStep(
+          targetKey: scanKey,
+          title: "Scan the equipment's QR",
+          body:
+              "The fastest way. Scan the QR sticker and the location and equipment fill in for you.",
+        ),
+        CoachStep(
+          targetKey: locationKey,
+          title: "Or choose manually",
+          body:
+              "Pick the room, then the equipment. You can switch rooms anytime — your list is kept.",
+        ),
+        CoachStep(
+          targetKey: notListedKey,
+          title: "Can't find it?",
+          body: "Turn this on and type the equipment name yourself.",
+        ),
+        CoachStep(
+          targetKey: issueKey,
+          title: "Pick the problem",
+          body:
+              "Choose the issue that matches. These appear after you select equipment.",
+        ),
+        CoachStep(
+          targetKey: descriptionKey,
+          title: "Describe it",
+          body:
+              "Opens once equipment is selected. Write what's wrong with that one item — details alone are fine if no issue fits.",
+        ),
+        CoachStep(
+          targetKey: addKey,
+          title: "Add it to your list",
+          body:
+              "Saves the equipment with its issue and details. Repeat for every item, even from other rooms.",
+        ),
+        CoachStep(
+          targetKey: itemsKey,
+          title: "Your list",
+          body:
+              "Each item can have one photo as proof. Long-press an item to see its full details.",
+        ),
+        CoachStep(
+          targetKey: submitKey,
+          title: "Send your report",
+          body:
+              "Everything goes out as one report. Priority is set automatically.",
+        ),
+      ];
 
   List<dynamic> get visibleSuggestedIssues {
     if (!equipmentNotListed) return suggestedIssues;
@@ -241,6 +330,7 @@ class _ReportScreenState extends State<ReportScreen> {
     Map<String, dynamic>? details,
     String? displayLabel,
     String? issue,
+    String? problemDetails,
     String? manualName,
     bool isManual = false,
   }) {
@@ -272,6 +362,7 @@ class _ReportScreenState extends State<ReportScreen> {
     if (issue != null && issue.trim().isNotEmpty) {
       add("Issue", issue);
     }
+    add("Details", problemDetails);
 
     if (rows.isEmpty && (displayLabel ?? "").trim().isNotEmpty) {
       add("Label", displayLabel);
@@ -285,6 +376,7 @@ class _ReportScreenState extends State<ReportScreen> {
     Map<String, dynamic>? details,
     String? displayLabel,
     String? issue,
+    String? problemDetails,
     String? manualName,
     bool isManual = false,
   }) async {
@@ -292,6 +384,7 @@ class _ReportScreenState extends State<ReportScreen> {
       details: details,
       displayLabel: displayLabel,
       issue: issue,
+      problemDetails: problemDetails,
       manualName: manualName,
       isManual: isManual,
     );
@@ -439,17 +532,20 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  String? get _draftIssueText {
-    final suggested = selectedSuggestedIssueName?.trim() ?? "";
-    if (suggested.isNotEmpty) return suggested;
-    final details = descriptionController.text.trim();
-    if (details.isNotEmpty) return details;
-    return null;
-  }
+  String get _draftIssue => selectedSuggestedIssueName?.trim() ?? "";
+
+  String get _draftDetails => descriptionController.text.trim();
+
+  /// Details describe one item, so the box only opens once equipment is chosen.
+  bool get _canWriteDetails => equipmentNotListed
+      ? equipmentController.text.trim().isNotEmpty
+      : selectedEquipmentId != null;
+
+  String _issueLabel(_ReportEquipmentItem item) =>
+      item.issue.isEmpty ? "Other" : item.issue;
 
   @override
   Widget build(BuildContext context) {
-    final isNonUrgent = priority == "Non-Urgent";
     final topInset = MediaQuery.of(context).padding.top;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -556,6 +652,30 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
+                    onTap: startTour,
+                    child: const Tooltip(
+                      message: "How to report",
+                      child: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.help_outline_rounded,
+                          size: 18,
+                          color: _blue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFFE8ECF4)),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () => Navigator.maybePop(context),
                     child: const SizedBox(
                       width: 36,
@@ -570,6 +690,10 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ],
             ),
+            if (showTourBanner) ...[
+              const SizedBox(height: 16),
+              _tourBanner(),
+            ],
             const SizedBox(height: 22),
 
             // ── Employee ID ──
@@ -579,6 +703,8 @@ class _ReportScreenState extends State<ReportScreen> {
               key: employeeKey,
               child: TextField(
                 controller: employeeIdController,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: const [_UpperCaseTextFormatter()],
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -599,15 +725,6 @@ class _ReportScreenState extends State<ReportScreen> {
                     reporterError = null;
                   });
 
-                  // After 3s idle, normalize to uppercase (OMC0129F) without fighting typing.
-                  if (!_skipEmployeeIdCapsSchedule) {
-                    _employeeIdCapsTimer?.cancel();
-                    _employeeIdCapsTimer = Timer(
-                      const Duration(seconds: 3),
-                      _uppercaseEmployeeIdIfNeeded,
-                    );
-                  }
-
                   _verifyTimer?.cancel();
                   _verifyTimer = Timer(
                     const Duration(milliseconds: 600),
@@ -617,6 +734,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     setState(() {
                       reporterVerified = false;
                       reporterName = "";
+                      assignedEquipment = [];
                       reporterError = null;
                       isCheckingReporter = false;
                     });
@@ -668,6 +786,11 @@ class _ReportScreenState extends State<ReportScreen> {
                         ),
                       ],
                     ),
+                    if (assignedEquipment.isNotEmpty)
+                      KeyedSubtree(
+                        key: assignedKey,
+                        child: _assignedEquipmentBox(),
+                      ),
                   ],
                 ),
               ),
@@ -687,6 +810,26 @@ class _ReportScreenState extends State<ReportScreen> {
             // ── Location & equipment ──
             _buildSectionTitle("Location & equipment"),
             const SizedBox(height: 8),
+            KeyedSubtree(key: scanKey, child: _scanQrButton()),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Expanded(child: Divider(color: _border)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    "or choose manually",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: _muted.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+                const Expanded(child: Divider(color: _border)),
+              ],
+            ),
+            const SizedBox(height: 10),
             KeyedSubtree(
               key: locationKey,
               child: Container(
@@ -725,6 +868,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               selectedSuggestedIssueName = null;
                               suggestedIssues.clear();
                               equipmentController.clear();
+                              descriptionController.clear();
                               itemsError = null;
                             });
                             if (selectedRoomId != null) {
@@ -798,6 +942,7 @@ class _ReportScreenState extends State<ReportScreen> {
             Row(
               children: [
                 Expanded(
+                  key: notListedKey,
                   child: Material(
                     color: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -814,10 +959,12 @@ class _ReportScreenState extends State<ReportScreen> {
                           selectedEquipmentId = null;
                           selectedEquipmentDetails = null;
                           equipmentController.clear();
+                          descriptionController.clear();
                           selectedSuggestedIssueId = null;
                           selectedSuggestedIssueName = null;
                           equipmentError = null;
                           issueError = null;
+                          descriptionError = null;
                         });
                         if (value) {
                           await loadGlobalSuggestedIssues();
@@ -880,6 +1027,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
+                  key: addKey,
                   height: 48,
                   child: FilledButton(
                     style: FilledButton.styleFrom(
@@ -905,27 +1053,18 @@ class _ReportScreenState extends State<ReportScreen> {
               ],
             ),
 
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: _soft,
-                borderRadius: BorderRadius.circular(_radiusSm),
-              ),
-              child: Text(
-                itemsError ??
-                    "Select equipment, then choose a suggested issue or fill Additional Details, then click Add. Labels include asset tag/serial so identical names stay distinguishable.",
-                style: TextStyle(
-                  color: itemsError != null
-                      ? const Color(0xFFEF4444)
-                      : const Color(0xFF6B7280),
+            if (itemsError != null && selectedItems.isEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                itemsError!,
+                style: const TextStyle(
+                  color: Color(0xFFEF4444),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   height: 1.45,
                 ),
               ),
-            ),
+            ],
             KeyedSubtree(
               key: itemsKey,
               child: selectedItems.isEmpty
@@ -949,7 +1088,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                       title: "Equipment details",
                                       details: item.details,
                                       displayLabel: item.displayLabel,
-                                      issue: item.issue,
+                                      issue: _issueLabel(item),
+                                      problemDetails: item.problemDetails,
                                       manualName: item.manualName,
                                       isManual: item.type ==
                                           _EquipmentItemType.manual,
@@ -1011,7 +1151,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                               ],
                                               const SizedBox(height: 4),
                                               Text(
-                                                "Issue: ${item.issue}",
+                                                "Issue: ${_issueLabel(item)}",
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
@@ -1020,6 +1160,22 @@ class _ReportScreenState extends State<ReportScreen> {
                                                   color: _muted,
                                                 ),
                                               ),
+                                              if (item.problemDetails
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  "\u201C${item.problemDetails}\u201D",
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontStyle: FontStyle.italic,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: _ink,
+                                                  ),
+                                                ),
+                                              ],
                                               if ((item.openReportTicket ?? "")
                                                   .isNotEmpty) ...[
                                                 const SizedBox(height: 4),
@@ -1035,6 +1191,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                                   ),
                                                 ),
                                               ],
+                                              const SizedBox(height: 8),
+                                              _itemPhotoControl(item),
                                             ],
                                           ),
                                         ),
@@ -1106,8 +1264,12 @@ class _ReportScreenState extends State<ReportScreen> {
               key: issueKey,
               child: Container(
                 width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 112),
-                padding: const EdgeInsets.all(14),
+                constraints: BoxConstraints(
+                  minHeight: suggestedIssues.isEmpty ? 112 : 0,
+                ),
+                padding: suggestedIssues.isEmpty
+                    ? const EdgeInsets.all(14)
+                    : const EdgeInsets.fromLTRB(10, 10, 0, 10),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(_radiusSm),
@@ -1285,7 +1447,7 @@ class _ReportScreenState extends State<ReportScreen> {
             _buildSectionTitle("Additional details"),
             const SizedBox(height: 4),
             const Text(
-              "Optional if a suggested issue is selected",
+              "For the selected equipment · optional if an issue is picked",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -1297,7 +1459,14 @@ class _ReportScreenState extends State<ReportScreen> {
               key: descriptionKey,
               child: TextField(
                 controller: descriptionController,
+                enabled: _canWriteDetails,
                 maxLines: 5,
+                maxLength: 2000,
+                buildCounter: (context,
+                        {required currentLength,
+                        required isFocused,
+                        maxLength}) =>
+                    null,
                 style: const TextStyle(
                   fontSize: 15,
                   height: 1.5,
@@ -1305,9 +1474,17 @@ class _ReportScreenState extends State<ReportScreen> {
                   color: _ink,
                 ),
                 decoration: _fieldDecoration(
-                  hintText: "Describe the problem...",
+                  hintText: _canWriteDetails
+                      ? "Describe this equipment's problem..."
+                      : "Select equipment first, then describe its problem",
                   errorText: descriptionError,
                   contentPadding: const EdgeInsets.fromLTRB(14, 14, 40, 14),
+                ).copyWith(
+                  fillColor: _canWriteDetails ? Colors.white : _soft,
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(_radius),
+                    borderSide: const BorderSide(color: _borderSoft),
+                  ),
                 ),
                 onChanged: (_) {
                   if (descriptionController.text.trim().isNotEmpty) {
@@ -1320,371 +1497,10 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
             ),
 
-            const SizedBox(height: 22),
-
-            // ── Priority level (light cards) ──
-            _buildSectionTitle("Priority level"),
-            const SizedBox(height: 10),
-            ...priorities.map((item) {
-              final selected = priority == item.value;
-              final isUrgent = item.value == "Urgent";
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Material(
-                  color: selected
-                      ? (isUrgent
-                          ? const Color(0xFFFEF2F2)
-                          : _blueSoft)
-                      : Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(
-                      color: selected
-                          ? (isUrgent
-                              ? const Color(0xFFEF4444)
-                              : _blue)
-                          : const Color(0xFFE8ECF4),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () {
-                      setState(() {
-                        priority = item.value;
-                        // Keep preferred date when switching Urgent ↔ Non-Urgent
-                        // (matches web). Urgent simply hides the field.
-                        if (item.value == "Urgent") {
-                          preferredDateError = null;
-                        }
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: selected
-                                    ? (isUrgent
-                                        ? const Color(0xFFEF4444)
-                                        : const Color(0xFF34D399))
-                                    : const Color(0xFFCBD5E1),
-                                width: 2,
-                              ),
-                              color: Colors.white,
-                            ),
-                            child: selected
-                                ? Center(
-                                    child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isUrgent
-                                            ? const Color(0xFFEF4444)
-                                            : const Color(0xFF34D399),
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.label,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14.5,
-                                    color: selected
-                                        ? (isUrgent
-                                            ? const Color(0xFFDC2626)
-                                            : _blue)
-                                        : _ink,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.description,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: _muted,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-
-            if (isNonUrgent) ...[
-              const SizedBox(height: 8),
-              KeyedSubtree(
-                key: preferredDateKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _buildSectionTitle("Preferred date"),
-                        const Spacer(),
-                        const Text(
-                          "Optional",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Material(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_radius),
-                        side: const BorderSide(color: _borderSoft),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(_radius),
-                        onTap: pickPreferredDate,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  preferredActionDate == null
-                                      ? ""
-                                      : DateFormat("dd/MM/yyyy")
-                                          .format(preferredActionDate!),
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: preferredActionDate == null
-                                        ? _placeholder
-                                        : _ink,
-                                  ),
-                                ),
-                              ),
-                              if (preferredActionDate != null)
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 32,
-                                    minHeight: 32,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      preferredActionDate = null;
-                                      preferredDateError = null;
-                                    });
-                                  },
-                                  icon: const Icon(
-                                    Icons.close_rounded,
-                                    size: 18,
-                                    color: _muted,
-                                  ),
-                                )
-                              else
-                                const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: Color(0xFF8892A4),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Optional. Earliest date is $_preferredDateMinDaysAhead days from today. If you skip this, maintenance will be reminded after $_nonUrgentReminderGraceDays days.",
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        height: 1.45,
-                        color: Color(0xFF9AA1B5),
-                      ),
-                    ),
-                    if (preferredDateError != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        preferredDateError!,
-                        style: const TextStyle(
-                          color: Color(0xFFEF4444),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 20),
-
-            // ── Upload proof ──
-            _buildSectionTitle("Upload proof image"),
-            const SizedBox(height: 10),
-            selectedImage == null
-                ? GestureDetector(
-                    onTap: pickImage,
-                    child: CustomPaint(
-                      painter: _DashedBorderPainter(
-                        color: const Color(0xFFC8D4F5),
-                        radius: 20,
-                      ),
-                      child: Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(minHeight: 120),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 22,
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_photo_alternate_outlined,
-                              color: Color(0xFF2947F0),
-                              size: 28,
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              "Click to upload photo",
-                              style: TextStyle(
-                                color: Color(0xFF334155),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              "(Optional)",
-                              style: TextStyle(
-                                color: Color(0xFFA7AAB9),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12.5,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              "PNG, JPG, JPEG, WEBP up to 10MB",
-                              style: TextStyle(
-                                color: Color(0xFF9AA1B5),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                : SizedBox(
-                    height: 140,
-                    width: double.infinity,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Material(
-                            color: _blueSoft,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: const BorderSide(
-                                color: _blue,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () =>
-                                  showProofImageFullscreen(selectedImage!),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.file(
-                                      selectedImage!,
-                                      fit: BoxFit.cover,
-                                    ),
-                                    Align(
-                                      alignment: Alignment.bottomCenter,
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 6,
-                                        ),
-                                        color: Colors.black
-                                            .withValues(alpha: 0.45),
-                                        child: const Text(
-                                          "Tap to view full screen",
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Material(
-                            color: const Color(0x26EF4444),
-                            shape: const CircleBorder(
-                              side: BorderSide(
-                                color: Color(0x4DEF4444),
-                              ),
-                            ),
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () => setState(() => selectedImage = null),
-                              child: const Padding(
-                                padding: EdgeInsets.all(7),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 16,
-                                  color: Color(0xFFEF4444),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
             const SizedBox(height: 28),
 
             SizedBox(
+              key: submitKey,
               width: double.infinity,
               height: 52,
               child: FilledButton.icon(
@@ -1735,7 +1551,6 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   void dispose() {
     _verifyTimer?.cancel();
-    _employeeIdCapsTimer?.cancel();
     employeeIdController.dispose();
     descriptionController.dispose();
     equipmentController.dispose();
@@ -1744,33 +1559,6 @@ class _ReportScreenState extends State<ReportScreen> {
     _locationSearchTimer?.cancel();
     _equipmentSearchTimer?.cancel();
     super.dispose();
-  }
-
-  /// Matches web: after 3s idle, normalize Employee ID to uppercase (e.g. OMC0129F).
-  void _uppercaseEmployeeIdIfNeeded() {
-    if (!mounted) return;
-    final current = employeeIdController.text;
-    final upper = current.toUpperCase();
-    if (current == upper) return;
-
-    final selection = employeeIdController.selection;
-    final pos = selection.isValid ? selection.baseOffset : upper.length;
-
-    _skipEmployeeIdCapsSchedule = true;
-    employeeIdController.value = TextEditingValue(
-      text: upper,
-      selection: TextSelection.collapsed(
-        offset: pos.clamp(0, upper.length),
-      ),
-    );
-    _skipEmployeeIdCapsSchedule = false;
-
-    // Re-verify with the normalized ID.
-    _verifyTimer?.cancel();
-    _verifyTimer = Timer(
-      const Duration(milliseconds: 100),
-      verifyReporter,
-    );
   }
 
   void addEquipmentItem() {
@@ -1806,15 +1594,8 @@ class _ReportScreenState extends State<ReportScreen> {
         return;
       }
 
-      final issue = _draftIssueText;
-      if (issue == null) {
-        setState(() {
-          issueError =
-              "Select a suggested issue or provide additional details before adding.";
-          descriptionError =
-              "Select a suggested issue or provide additional details before adding.";
-        });
-        scrollToField(issueKey);
+      if (_draftIssue.isEmpty && _draftDetails.isEmpty) {
+        _showMissingIssueError();
         return;
       }
 
@@ -1826,7 +1607,8 @@ class _ReportScreenState extends State<ReportScreen> {
             locationLabel: selectedLocation ?? "",
             displayLabel: name,
             manualName: name,
-            issue: issue,
+            issue: _draftIssue,
+            problemDetails: _draftDetails,
           ),
         );
         equipmentController.clear();
@@ -1859,15 +1641,8 @@ class _ReportScreenState extends State<ReportScreen> {
       return;
     }
 
-    final issue = _draftIssueText;
-    if (issue == null) {
-      setState(() {
-        issueError =
-            "Select a suggested issue or provide additional details before adding.";
-        descriptionError =
-            "Select a suggested issue or provide additional details before adding.";
-      });
-      scrollToField(issueKey);
+    if (_draftIssue.isEmpty && _draftDetails.isEmpty) {
+      _showMissingIssueError();
       return;
     }
 
@@ -1879,7 +1654,8 @@ class _ReportScreenState extends State<ReportScreen> {
           locationLabel: selectedLocation ?? "",
           id: selectedEquipmentId,
           displayLabel: selectedEquipmentLabel!,
-          issue: issue,
+          issue: _draftIssue,
+          problemDetails: _draftDetails,
           openReportTicket:
               _openReportTicketOf(selectedEquipmentDetails ?? {}),
           details: selectedEquipmentDetails,
@@ -1895,31 +1671,14 @@ class _ReportScreenState extends State<ReportScreen> {
     });
   }
 
-  Future<void> pickPreferredDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: preferredActionDate ?? _earliestPreferredDate,
-      firstDate: _earliestPreferredDate,
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: _blue,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: _ink,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked == null) return;
+  void _showMissingIssueError() {
+    const message =
+        "Select a suggested issue or describe the problem before adding.";
     setState(() {
-      preferredActionDate = picked;
-      preferredDateError = null;
+      issueError = message;
+      descriptionError = message;
     });
+    scrollToField(issueKey);
   }
 
   Future<void> verifyReporter() async {
@@ -1949,15 +1708,53 @@ class _ReportScreenState extends State<ReportScreen> {
         reporterError = null;
         employeeIdError = null;
       });
+      _loadAssignedEquipment(employeeId);
     } else {
       setState(() {
         isCheckingReporter = false;
         reporterVerified = false;
         reporterName = "";
+        assignedEquipment = [];
         // Keep errors silent until Submit Report validation.
         reporterError = null;
       });
     }
+  }
+
+  Future<void> _loadAssignedEquipment(String employeeId) async {
+    final items = await api.getAssignedEquipment(employeeId);
+    if (!mounted ||
+        !reporterVerified ||
+        employeeIdController.text.trim() != employeeId) {
+      return;
+    }
+    setState(() => assignedEquipment = items);
+  }
+
+  Future<void> pickAssignedEquipment(Map<String, dynamic> item) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final id = _equipmentIdOf(item);
+    if (id != null && _addedEquipmentIds.contains(id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text("That equipment is already in your list."),
+        ),
+      );
+      return;
+    }
+    final error = await _selectEquipmentItem(item);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          error ??
+              "${item["equipment_name"] ?? "Equipment"} selected. "
+                  "Choose an issue or describe the problem, then tap Add.",
+        ),
+      ),
+    );
   }
 
   Future<void> loadRooms() async {
@@ -1975,6 +1772,328 @@ class _ReportScreenState extends State<ReportScreen> {
       selectedEquipmentId = null;
       selectedEquipmentDetails = null;
     });
+  }
+
+  Widget _tourBanner() {
+    return Material(
+      color: _blueSoft,
+      borderRadius: BorderRadius.circular(_radiusSm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(_radiusSm),
+        onTap: startTour,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.tips_and_updates_outlined,
+                size: 18,
+                color: _blue,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "New here? See how to report",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _blue,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _hideTourBanner,
+                tooltip: "Dismiss",
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: _muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _assignedEquipmentBox() {
+    final added = _addedEquipmentIds;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: "EQUIPMENT ASSIGNED TO YOU",
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7,
+                    color: _muted,
+                  ),
+                ),
+                TextSpan(
+                  text: "  · tap one to report it",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: _placeholder,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: assignedEquipment.map((item) {
+              final id = _equipmentIdOf(item);
+              final isAdded = id != null && added.contains(id);
+              final isSelected = id != null && id == selectedEquipmentId;
+              final name =
+                  (item["equipment_name"]?.toString() ?? "Equipment").trim();
+              final room = (item["room_name"]?.toString() ?? "").trim();
+              return Material(
+                color: isSelected ? _amber : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide(
+                    color: isSelected ? Colors.transparent : _border,
+                  ),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: isAdded ? null : () => pickAssignedEquipment(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isAdded) ...[
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 14,
+                            color: Color(0xFF22C55E),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Flexible(
+                          child: Text(
+                            name,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isAdded ? _placeholder : _ink,
+                            ),
+                          ),
+                        ),
+                        if (room.isNotEmpty) ...[
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              room,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _placeholder,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scanQrButton() {
+    final enabled = reporterVerified;
+    return Material(
+      color: enabled ? _blue : _soft,
+      borderRadius: BorderRadius.circular(_radius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(_radius),
+        onTap: scanEquipmentQr,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: enabled
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(_radiusSm),
+                ),
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: 20,
+                  color: enabled ? _amber : _placeholder,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Scan equipment QR",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: enabled ? Colors.white : _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      enabled
+                          ? "Fills in the location and equipment for you"
+                          : "Enter your Employee ID first",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: enabled
+                            ? Colors.white.withValues(alpha: 0.75)
+                            : _placeholder,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: enabled ? Colors.white : _placeholder,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> scanEquipmentQr() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!reporterVerified) {
+      setState(() {
+        employeeIdError = "Enter a valid Employee ID before scanning.";
+      });
+      scrollToField(employeeKey);
+      return;
+    }
+
+    String? scannedName;
+    final accepted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QRScannerScreen(
+          hint: "Scan the QR label on the equipment to report",
+          onCodeScanned: (code) async {
+            final result = await _applyScannedEquipment(code);
+            if (result.error == null) scannedName = result.name;
+            return result.error;
+          },
+        ),
+      ),
+    );
+
+    if (!mounted || accepted != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          "${scannedName ?? "Equipment"} selected from QR. "
+          "Choose an issue, then tap Add.",
+        ),
+      ),
+    );
+  }
+
+  /// Validates a scanned QR and fills location + equipment on success.
+  Future<({String? error, String? name})> _applyScannedEquipment(
+    String code,
+  ) async {
+    final res = await api.getReportEquipmentByQr(code);
+    if (res["success"] != true || res["equipment"] is! Map) {
+      final msg = res["message"]?.toString().trim();
+      return (
+        error: (msg == null || msg.isEmpty)
+            ? "No equipment matches this QR code."
+            : msg,
+        name: null,
+      );
+    }
+
+    final item = Map<String, dynamic>.from(res["equipment"] as Map);
+    final id = _equipmentIdOf(item);
+    if (id != null && _addedEquipmentIds.contains(id)) {
+      return (error: "That equipment is already in your list.", name: null);
+    }
+
+    final error = await _selectEquipmentItem(item);
+    return (
+      error: error,
+      name: error == null
+          ? item["equipment_name"]?.toString() ?? "Equipment"
+          : null,
+    );
+  }
+
+  /// Fills location + equipment from an equipment row that carries `room_id`.
+  Future<String?> _selectEquipmentItem(Map<String, dynamic> item) async {
+    final id = _equipmentIdOf(item);
+    final roomId = int.tryParse(item["room_id"]?.toString() ?? "");
+    if (id == null || roomId == null) {
+      return "This equipment has no location yet.";
+    }
+
+    final roomChanged = roomId != selectedRoomId;
+    final room = rooms.cast<dynamic>().firstWhere(
+          (r) => r is Map && r["room_id"]?.toString() == roomId.toString(),
+          orElse: () => null,
+        );
+    final roomEquipment = await api.getEquipment(roomId);
+    if (!mounted) return null;
+
+    setState(() {
+      if (roomChanged || equipmentNotListed) descriptionController.clear();
+      equipmentNotListed = false;
+      equipmentController.clear();
+      selectedRoomId = roomId;
+      selectedLocation = room != null
+          ? formatRoomLocationLabel(room)
+          : (item["location"]?.toString() ?? "");
+      equipment = roomEquipment.isNotEmpty ? roomEquipment : [item];
+      selectedEquipmentId = id;
+      selectedEquipmentLabel = formatEquipmentLabel(item);
+      selectedEquipmentDetails = _detailsFromEquipment(item);
+      selectedSuggestedIssueId = null;
+      selectedSuggestedIssueName = null;
+      suggestedIssues.clear();
+      locationError = null;
+      equipmentError = null;
+      itemsError = null;
+    });
+    loadSuggestedIssues(id);
+    return null;
   }
 
   Future<void> loadSuggestedIssues(int equipmentId) async {
@@ -1999,7 +2118,92 @@ class _ReportScreenState extends State<ReportScreen> {
     });
   }
 
-  Future<void> pickImage() async {
+  Widget _itemPhotoControl(_ReportEquipmentItem item) {
+    final photo = item.photo;
+    if (photo == null) {
+      return Material(
+        color: _blueSoft,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: const BorderSide(color: Color(0xFFE0E7FF)),
+        ),
+        child: InkWell(
+          customBorder: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+          onTap: () => pickItemPhoto(item),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.photo_camera_outlined, size: 14, color: _blue),
+                SizedBox(width: 6),
+                Text(
+                  "Add photo",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _blue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => showProofImageFullscreen(photo),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.file(
+              photo,
+              width: 52,
+              height: 52,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        TextButton(
+          onPressed: () => pickItemPhoto(item),
+          style: TextButton.styleFrom(
+            foregroundColor: _blue,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+          child: const Text(
+            "Change",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => item.photo = null),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFFDC2626),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+          child: const Text(
+            "Remove photo",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> pickItemPhoto(_ReportEquipmentItem item) async {
+    final file = await _pickPhoto();
+    if (!mounted || file == null) return;
+    setState(() => item.photo = file);
+  }
+
+  Future<File?> _pickPhoto() async {
     FocusManager.instance.primaryFocus?.unfocus();
     final picker = ImagePicker();
 
@@ -2045,7 +2249,7 @@ class _ReportScreenState extends State<ReportScreen> {
       },
     );
 
-    if (source == null) return;
+    if (source == null) return null;
 
     final image = await picker.pickImage(
       source: source,
@@ -2053,8 +2257,7 @@ class _ReportScreenState extends State<ReportScreen> {
       maxWidth: 1280,
       maxHeight: 1280,
     );
-    if (!mounted || image == null) return;
-    setState(() => selectedImage = File(image.path));
+    return image == null ? null : File(image.path);
   }
 
   Future<void> showProofImageFullscreen(File image) async {
@@ -2153,22 +2356,14 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Map<int, List<_ReportEquipmentItem>> _itemsByRoom() {
-    final groups = <int, List<_ReportEquipmentItem>>{};
-    for (final item in selectedItems) {
-      groups.putIfAbsent(item.roomId, () => []).add(item);
-    }
-    return groups;
-  }
-
   String _submitConfirmMessage() {
     final openReportItems = selectedItems
         .where((item) => (item.openReportTicket ?? "").isNotEmpty)
         .length;
-    final locationCount = _itemsByRoom().length;
+    final locationCount = selectedItems.map((item) => item.roomId).toSet().length;
     if (selectedItems.length > 1) {
       final scope = locationCount > 1
-          ? "as $locationCount location reports"
+          ? "from $locationCount locations in one maintenance report"
           : "in one maintenance report";
       if (openReportItems == selectedItems.length) {
         return "Submit ${selectedItems.length} equipment items $scope? "
@@ -2209,89 +2404,65 @@ class _ReportScreenState extends State<ReportScreen> {
               isSending = true;
               setDialogState(() => phase = "submitting");
 
-              final groups = _itemsByRoom();
-              var submittedGroups = 0;
-
-              void dropSubmittedGroups() {
-                if (submittedGroups == 0 || !mounted) return;
-                final doneRooms =
-                    groups.keys.take(submittedGroups).toSet();
-                setState(() {
-                  selectedItems
-                      .removeWhere((e) => doneRooms.contains(e.roomId));
-                });
-              }
-
-              String partialNote() {
-                if (submittedGroups == 0) return "";
-                return " Some locations were saved already. "
-                    "Remaining items are still in your list.";
-              }
-
               try {
-                String? preferred;
-                if (priority == "Non-Urgent" && preferredActionDate != null) {
-                  preferred = DateFormat("yyyy-MM-dd")
-                      .format(preferredActionDate!);
-                }
-
                 final totalItems = selectedItems.length;
-                String? lastServerMessage;
-                final reportIds = <String>[];
+                final listed = selectedItems
+                    .where((e) => e.type == _EquipmentItemType.listed)
+                    .toList();
+                final manuals = selectedItems
+                    .where((e) => e.type == _EquipmentItemType.manual)
+                    .toList();
 
-                for (final entry in groups.entries) {
-                  final listed = entry.value
-                      .where((e) => e.type == _EquipmentItemType.listed)
-                      .toList();
-                  final manuals = entry.value
-                      .where((e) => e.type == _EquipmentItemType.manual)
-                      .toList();
+                final response = await api.submitReport(
+                  employeeId: employeeIdController.text.trim(),
+                  roomId: selectedItems.first.roomId,
+                  equipmentIds: listed.map((e) => e.id!).toList(),
+                  equipmentIssues: listed.map((e) => e.issue).toList(),
+                  equipmentDetails:
+                      listed.map((e) => e.problemDetails).toList(),
+                  manualEquipmentNames:
+                      manuals.map((e) => e.manualName!).toList(),
+                  manualEquipmentIssues: manuals.map((e) => e.issue).toList(),
+                  manualEquipmentDetails:
+                      manuals.map((e) => e.problemDetails).toList(),
+                  manualEquipmentRooms: manuals.map((e) => e.roomId).toList(),
+                  equipmentPhotos: {
+                    for (final e in listed)
+                      if (e.photo != null) e.id!: e.photo!,
+                  },
+                  manualEquipmentPhotos: manuals.map((e) => e.photo).toList(),
+                );
 
-                  final response = await api.submitReport(
-                    employeeId: employeeIdController.text.trim(),
-                    roomId: entry.key,
-                    equipmentIds: listed.map((e) => e.id!).toList(),
-                    equipmentIssues: listed.map((e) => e.issue).toList(),
-                    manualEquipmentNames:
-                        manuals.map((e) => e.manualName!).toList(),
-                    manualEquipmentIssues:
-                        manuals.map((e) => e.issue).toList(),
-                    priority: priority,
-                    preferredActionDate: preferred,
-                    photo: selectedImage,
-                  );
+                if (!dialogContext.mounted) return;
 
-                  if (!dialogContext.mounted) return;
-
-                  final data = response.data;
-                  if (response.statusCode != null &&
-                      response.statusCode! >= 400) {
-                    final serverMessage = data is Map
-                        ? (data["message"]?.toString() ?? errorMessage)
-                        : errorMessage;
-                    errorMessage = "$serverMessage${partialNote()}";
-                    dropSubmittedGroups();
-                    isSending = false;
-                    setDialogState(() => phase = "error");
-                    return;
-                  }
-
-                  if (data is Map) {
-                    lastServerMessage = data["message"]?.toString();
-                    final reportId = data["report_id"]?.toString() ?? "";
-                    if (reportId.isNotEmpty) reportIds.add("#$reportId");
-                  }
-                  submittedGroups++;
+                final data = response.data;
+                if (response.statusCode != null &&
+                    response.statusCode! >= 400) {
+                  errorMessage = data is Map
+                      ? (data["message"]?.toString() ?? errorMessage)
+                      : errorMessage;
+                  isSending = false;
+                  setDialogState(() => phase = "error");
+                  return;
                 }
 
-                if (groups.length > 1) {
-                  successMessage = "Submitted ${groups.length} location reports"
-                      "${reportIds.isEmpty ? "" : " (${reportIds.join(", ")})"}.";
-                } else if (lastServerMessage != null) {
-                  successMessage = lastServerMessage;
+                final serverMessage =
+                    data is Map ? data["message"]?.toString() : null;
+                if (serverMessage != null && serverMessage.isNotEmpty) {
+                  successMessage = serverMessage;
                 } else if (totalItems > 1) {
                   successMessage =
                       "Your report with $totalItems equipment items was sent successfully.";
+                }
+
+                final level =
+                    data is Map ? data["severity"]?.toString().trim() ?? "" : "";
+                final reason = data is Map
+                    ? data["severity_reason"]?.toString().trim() ?? ""
+                    : "";
+                if (level.isNotEmpty) {
+                  successMessage += "\n\nPriority: $level."
+                      "${reason.isEmpty ? "" : " $reason"}";
                 }
 
                 setDialogState(() => phase = "success");
@@ -2329,8 +2500,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   }
                 }
 
-                errorMessage = "$errorMessage${partialNote()}";
-                dropSubmittedGroups();
                 if (!dialogContext.mounted) return;
                 isSending = false;
                 setDialogState(() => phase = "error");
@@ -2640,7 +2809,6 @@ class _ReportScreenState extends State<ReportScreen> {
       equipmentError = null;
       issueError = null;
       descriptionError = null;
-      preferredDateError = null;
       itemsError = null;
     });
 
@@ -2668,21 +2836,11 @@ class _ReportScreenState extends State<ReportScreen> {
           "Add at least one equipment with a suggested issue or additional details.";
       firstErrorKey ??= itemsKey;
       hasError = true;
-    }
-
-    if (priority == "Non-Urgent" && preferredActionDate != null) {
-      final min = _earliestPreferredDate;
-      final picked = DateTime(
-        preferredActionDate!.year,
-        preferredActionDate!.month,
-        preferredActionDate!.day,
-      );
-      if (picked.isBefore(min)) {
-        preferredDateError =
-            "Preferred date must be at least $_preferredDateMinDaysAhead days from today.";
-        firstErrorKey ??= preferredDateKey;
-        hasError = true;
-      }
+    } else if (_draftDetails.isNotEmpty) {
+      descriptionError =
+          "You wrote details but didn't add that equipment yet. Tap Add to include it, or clear the details.";
+      firstErrorKey ??= descriptionKey;
+      hasError = true;
     }
 
     setState(() {});
@@ -2714,13 +2872,13 @@ class _ReportScreenState extends State<ReportScreen> {
     employeeIdController.clear();
     descriptionController.clear();
     equipmentController.clear();
-    _employeeIdCapsTimer?.cancel();
     _verifyTimer?.cancel();
 
     setState(() {
       reporterVerified = false;
       reporterName = "";
       reporterError = null;
+      assignedEquipment = [];
       selectedRoomId = null;
       selectedLocation = null;
       selectedEquipmentLabel = null;
@@ -2732,15 +2890,11 @@ class _ReportScreenState extends State<ReportScreen> {
       equipment.clear();
       selectedItems.clear();
       equipmentNotListed = false;
-      selectedImage = null;
-      priority = "Non-Urgent";
-      preferredActionDate = null;
       employeeIdError = null;
       locationError = null;
       equipmentError = null;
       issueError = null;
       descriptionError = null;
-      preferredDateError = null;
       itemsError = null;
     });
   }
@@ -2767,19 +2921,39 @@ class _ReportScreenState extends State<ReportScreen> {
     return name.trim();
   }
 
-  List<({String key, String label})> _collectEquipmentCategories(
-    List<dynamic> items,
-  ) {
-    final map = <String, String>{};
+  /// Full category name for a chip's long-press tooltip.
+  String _equipmentCategoryFullName(String name) {
+    final trimmed = name.trim();
+    switch (trimmed.toLowerCase()) {
+      case "":
+        return "Other / uncategorized";
+      case "ave":
+        return "Audio-Visual Equipment";
+      case "ce":
+        return "Computer Equipment";
+    }
+    return trimmed;
+  }
+
+  List<({String key, String label, String fullName})>
+      _collectEquipmentCategories(List<dynamic> items) {
+    final map = <String, ({String label, String fullName})>{};
     for (final item in items) {
       final id = _equipmentCategoryIdOf(item);
       final name = _equipmentCategoryNameOf(item);
       if (id.isEmpty && name.isEmpty) continue;
       final key = id.isNotEmpty ? id : name;
-      map.putIfAbsent(key, () => _equipmentCategoryShortLabel(name));
+      map.putIfAbsent(
+        key,
+        () => (
+          label: _equipmentCategoryShortLabel(name),
+          fullName: _equipmentCategoryFullName(name),
+        ),
+      );
     }
     final list = map.entries
-        .map((e) => (key: e.key, label: e.value))
+        .map((e) =>
+            (key: e.key, label: e.value.label, fullName: e.value.fullName))
         .toList()
       ..sort((a, b) => a.label.compareTo(b.label));
     return list;
@@ -3000,6 +3174,7 @@ class _ReportScreenState extends State<ReportScreen> {
                             children: [
                               _categoryChip(
                                 label: "All",
+                                tooltip: "All categories",
                                 selected: categoryFilter.isEmpty,
                                 onTap: () => setModalState(
                                   () => categoryFilter = "",
@@ -3010,6 +3185,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                   padding: const EdgeInsets.only(left: 8),
                                   child: _categoryChip(
                                     label: cat.label,
+                                    tooltip: cat.fullName,
                                     selected: categoryFilter == cat.key,
                                     onTap: () => setModalState(
                                       () => categoryFilter = cat.key,
@@ -3168,8 +3344,9 @@ class _ReportScreenState extends State<ReportScreen> {
     required String label,
     required bool selected,
     required VoidCallback onTap,
+    String? tooltip,
   }) {
-    return Material(
+    final chip = Material(
       color: selected ? const Color(0xFFEEF2FF) : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999),
@@ -3192,6 +3369,27 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
         ),
       ),
+    );
+
+    if (tooltip == null || tooltip.trim().isEmpty) return chip;
+
+    return Tooltip(
+      message: tooltip,
+      triggerMode: TooltipTriggerMode.longPress,
+      preferBelow: true,
+      verticalOffset: 22,
+      showDuration: const Duration(seconds: 2),
+      decoration: BoxDecoration(
+        color: _ink,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      textStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: chip,
     );
   }
 
@@ -3560,53 +3758,5 @@ class _ReportScreenState extends State<ReportScreen> {
         borderSide: const BorderSide(color: Color(0xFFEF4444)),
       ),
     );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  final Color color;
-  final double radius;
-  final double strokeWidth;
-  final double dashWidth;
-  final double dashGap;
-
-  _DashedBorderPainter({
-    required this.color,
-    this.radius = 20,
-  })  : strokeWidth = 1.5,
-        dashWidth = 6,
-        dashGap = 4;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        strokeWidth / 2,
-        strokeWidth / 2,
-        size.width - strokeWidth,
-        size.height - strokeWidth,
-      ),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = (distance + dashWidth).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance += dashWidth + dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.radius != radius ||
-        oldDelegate.strokeWidth != strokeWidth;
   }
 }
