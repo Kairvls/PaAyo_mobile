@@ -37,3 +37,12 @@ Web to Email form for registering as reporter:
 - php artisan serve --host=0.0.0.0 --port=8000
 
 should we remove this? or like theres a mode that when on or turn on or click to guide mode the system will shows how to report like on the image 3 or like on the modern mobile apps right now that theres a tutorial mode or like on games that theres a bubble text that will pop point to that area or field then you click any empty area it will next to the next step guide like that until you reach the end of the tutorial or guide mode
+
+
+no duplication of gmail in the equipment reporters list
+
+Enter your employee ID and 6-digit PIN so nobody else can report under your name.\
+We'll email a link
+
+Your PIN is emailed to you when the maintenance office adds or approves you as a reporter. 
+No PIN or no email on file?

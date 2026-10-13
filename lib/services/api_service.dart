@@ -4,7 +4,7 @@ import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.1.13:8000/api";
+  static const String baseUrl = "http://192.168.1.18:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -28,23 +28,121 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>?> verifyReporter(String employeeId) async {
+  /// Short-lived token from [verifyReporterPin]; sent as `X-Reporter-Token`.
+  String? _reporterToken;
+
+  bool get hasReporterToken => _reporterToken != null;
+
+  Options _reporterOptions({Options? base}) {
+    final options = base ?? Options();
+    return options.copyWith(
+      headers: {
+        ...?options.headers,
+        if (_reporterToken != null) "X-Reporter-Token": _reporterToken,
+      },
+    );
+  }
+
+  void clearReporterToken() => _reporterToken = null;
+
+  /// Phase 1 of reporting: employee ID + 6-digit PIN.
+  /// Returns the server body (`success`, `reporter`, or `code` + `message`);
+  /// never throws for 4xx responses.
+  Future<Map<String, dynamic>> verifyReporterPin(
+    String employeeId,
+    String pin,
+  ) async {
     try {
-      final response = await dio.get(
-        "$baseUrl/reporter/$employeeId",
+      final response = await dio.post(
+        "$baseUrl/reporter/verify",
+        data: {"employee_id": employeeId.trim(), "pin": pin.trim()},
+        options: Options(validateStatus: (s) => s != null && s < 500),
       );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data)
+          : <String, dynamic>{};
 
-      print("STATUS: ${response.statusCode}");
-      print("DATA: ${response.data}");
-
-      if (response.statusCode == 200) {
-        return Map<String, dynamic>.from(response.data);
+      if (response.statusCode == 200 && data["success"] == true) {
+        _reporterToken = data["token"]?.toString();
+        return data;
       }
-    } catch (e) {
-      print("ERROR:");
-      print(e);
-    }
 
+      if (response.statusCode == 429 && data["message"] == null) {
+        data["message"] = "Too many attempts. Please wait and try again.";
+      }
+      data["success"] = false;
+      data["message"] ??= _firstValidationError(data) ??
+          "Could not verify. Please try again.";
+      return data;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final message = data is Map ? data["message"]?.toString() : null;
+      return {
+        "success": false,
+        "message": message ??
+            (e.response == null
+                ? "Network error. Check your connection and try again."
+                : "Server error (${e.response?.statusCode}). Please try again."),
+      };
+    } catch (_) {
+      return {
+        "success": false,
+        "message": "Network error. Check your connection and try again.",
+      };
+    }
+  }
+
+  /// Ends the reporter verification on the server and locally.
+  Future<void> logoutReporter() async {
+    final token = _reporterToken;
+    _reporterToken = null;
+    if (token == null) return;
+    try {
+      await dio.post(
+        "$baseUrl/reporter/logout",
+        options: Options(
+          headers: {"X-Reporter-Token": token},
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Emails a PIN reset link. The reply is the same whether or not the ID exists.
+  Future<Map<String, dynamic>> forgotReporterPin(String employeeId) async {
+    try {
+      final response = await dio.post(
+        "$baseUrl/reporter/forgot-pin",
+        data: {"employee_id": employeeId.trim()},
+        options: Options(validateStatus: (s) => s != null && s < 500),
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data)
+          : <String, dynamic>{};
+      final ok = response.statusCode == 200 && data["success"] == true;
+      data["success"] = ok;
+      if (!ok) {
+        data["message"] ??= response.statusCode == 429
+            ? "Too many requests. Please wait a minute and try again."
+            : _firstValidationError(data) ??
+                "Could not send the link. Please try again.";
+      }
+      return data;
+    } catch (_) {
+      return {
+        "success": false,
+        "message": "Network error. Check your connection and try again.",
+      };
+    }
+  }
+
+  String? _firstValidationError(Map<String, dynamic> data) {
+    final errors = data["errors"];
+    if (errors is! Map) return null;
+    for (final value in errors.values) {
+      if (value is List && value.isNotEmpty) return value.first.toString();
+      if (value != null) return value.toString();
+    }
     return null;
   }
 
@@ -99,7 +197,9 @@ class ApiService {
     try {
       final response = await dio.get(
         "$baseUrl/reporter/${Uri.encodeComponent(employeeId.trim())}/assigned-equipment",
-        options: Options(validateStatus: (s) => s != null && s < 500),
+        options: _reporterOptions(
+          base: Options(validateStatus: (s) => s != null && s < 500),
+        ),
       );
       final data = response.data;
       if (response.statusCode == 200 && data is List) {
@@ -231,10 +331,12 @@ class ApiService {
     return await dio.post(
       "$baseUrl/submit-report",
       data: formData,
-      options: Options(
-        sendTimeout: const Duration(seconds: 45),
-        receiveTimeout: const Duration(seconds: 45),
-        receiveDataWhenStatusError: true,
+      options: _reporterOptions(
+        base: Options(
+          sendTimeout: const Duration(seconds: 45),
+          receiveTimeout: const Duration(seconds: 45),
+          receiveDataWhenStatusError: true,
+        ),
       ),
     );
   }

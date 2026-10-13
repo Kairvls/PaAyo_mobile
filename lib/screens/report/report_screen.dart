@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../qr/qr_scanner_screen.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,8 @@ class ReportScreen extends StatefulWidget {
 }
 
 enum _EquipmentItemType { listed, manual }
+
+enum _GateTone { error, warn, info }
 
 /// Uppercases as the user types, keeping the cursor where it was.
 class _UpperCaseTextFormatter extends TextInputFormatter {
@@ -63,7 +66,8 @@ class _ReportEquipmentItem {
   });
 }
 
-class _ReportScreenState extends State<ReportScreen> {
+class _ReportScreenState extends State<ReportScreen>
+    with SingleTickerProviderStateMixin {
   /// Matches STI-PRISM mobile Maintenance Report modal tokens.
   static const _ink = Color(0xFF1A1A2E);
   static const _muted = Color(0xFF6B7280);
@@ -85,13 +89,28 @@ class _ReportScreenState extends State<ReportScreen> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController equipmentController = TextEditingController();
 
+  /// Step 1 (employee ID + PIN) passed; the report form (step 2) is shown.
   bool reporterVerified = false;
   String reporterName = "";
   final ApiService api = ApiService();
-  Timer? _verifyTimer;
-  bool isCheckingReporter = false;
-  String? reporterError;
   bool equipmentNotListed = false;
+
+  final TextEditingController pinController = TextEditingController();
+  final TextEditingController forgotIdController = TextEditingController();
+  final FocusNode _pinFocus = FocusNode();
+  bool showPin = false;
+  late final AnimationController _pinShake = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  bool showForgotPin = false;
+  bool isVerifyingPin = false;
+  bool isSendingForgot = false;
+  String? gateMessage;
+  _GateTone gateMessageTone = _GateTone.error;
+  String? forgotMessage;
+  _GateTone forgotMessageTone = _GateTone.info;
+  bool _tourChecked = false;
 
   List<dynamic> suggestedIssues = [];
   int? selectedSuggestedIssueId;
@@ -112,7 +131,6 @@ class _ReportScreenState extends State<ReportScreen> {
   /// Equipment issued to the verified reporter (property assignment).
   List<Map<String, dynamic>> assignedEquipment = [];
 
-  String? employeeIdError;
   String? locationError;
   String? equipmentError;
   String? issueError;
@@ -143,7 +161,9 @@ class _ReportScreenState extends State<ReportScreen> {
   void initState() {
     super.initState();
     loadRooms();
-    _initTour();
+    _pinFocus.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _initTour() async {
@@ -182,8 +202,9 @@ class _ReportScreenState extends State<ReportScreen> {
   List<CoachStep> _tourSteps() => [
         CoachStep(
           targetKey: employeeKey,
-          title: "Enter your Employee ID",
-          body: "Start here. Your name shows up once your ID is recognized.",
+          title: "You're verified",
+          body:
+              "Your employee ID was confirmed with your PIN. Not you? Tap Switch reporter.",
         ),
         CoachStep(
           targetKey: assignedKey,
@@ -558,7 +579,9 @@ class _ReportScreenState extends State<ReportScreen> {
       ),
       child: Scaffold(
       backgroundColor: _page,
-      body: SingleChildScrollView(
+      body: !reporterVerified
+          ? _buildGate(topInset)
+          : SingleChildScrollView(
         controller: scrollController,
         padding: EdgeInsets.fromLTRB(20, topInset + 16, 20, 32),
         child: Column(
@@ -703,8 +726,8 @@ class _ReportScreenState extends State<ReportScreen> {
               key: employeeKey,
               child: TextField(
                 controller: employeeIdController,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: const [_UpperCaseTextFormatter()],
+                readOnly: true,
+                enableInteractiveSelection: false,
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -712,39 +735,56 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
                 decoration: _fieldDecoration(
                   hintText: "EMPLOYEE ID",
-                  errorText: employeeIdError,
                   prefixIcon: const Icon(
                     Icons.face_retouching_natural_rounded,
                     color: _blue,
                     size: 22,
                   ),
+                ).copyWith(
+                  fillColor: _soft,
+                  suffixIcon: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: _muted,
+                    size: 18,
+                  ),
                 ),
-                onChanged: (_) {
-                  setState(() {
-                    employeeIdError = null;
-                    reporterError = null;
-                  });
-
-                  _verifyTimer?.cancel();
-                  _verifyTimer = Timer(
-                    const Duration(milliseconds: 600),
-                    verifyReporter,
-                  );
-                  if (employeeIdController.text.trim().isEmpty) {
-                    setState(() {
-                      reporterVerified = false;
-                      reporterName = "";
-                      assignedEquipment = [];
-                      reporterError = null;
-                      isCheckingReporter = false;
-                    });
-                  } else {
-                    setState(() => isCheckingReporter = true);
-                  }
-                },
               ),
             ),
-            if (reporterVerified && reporterName.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.verified_user_outlined,
+                        size: 14,
+                        color: Color(0xFF059669),
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        "Verified with PIN",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                _gateLink("Not you? Switch reporter", _switchReporter),
+              ],
+            ),
+            if (reporterName.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
@@ -793,15 +833,6 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                   ],
                 ),
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _statusDot(),
-                  const SizedBox(width: 8),
-                  Expanded(child: _reporterStatusText()),
-                ],
               ),
             ],
 
@@ -1550,8 +1581,12 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   void dispose() {
-    _verifyTimer?.cancel();
+    unawaited(api.logoutReporter());
     employeeIdController.dispose();
+    pinController.dispose();
+    forgotIdController.dispose();
+    _pinFocus.dispose();
+    _pinShake.dispose();
     descriptionController.dispose();
     equipmentController.dispose();
     scrollController.dispose();
@@ -1681,44 +1716,142 @@ class _ReportScreenState extends State<ReportScreen> {
     scrollToField(issueKey);
   }
 
-  Future<void> verifyReporter() async {
+  void _setGateMessage(String? message, [_GateTone tone = _GateTone.error]) {
+    setState(() {
+      gateMessage = message;
+      gateMessageTone = tone;
+    });
+  }
+
+  /// Step 1 → step 2: the server checks the employee ID and PIN.
+  Future<void> _submitPin() async {
+    if (isVerifyingPin) return;
     final employeeId = employeeIdController.text.trim();
+    final pin = pinController.text.trim();
+
+    if (employeeId.isEmpty) {
+      _setGateMessage("Enter your employee ID.");
+      return;
+    }
+    if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
+      _setGateMessage("Enter your 6-digit PIN.");
+      _pinShake.forward(from: 0);
+      _pinFocus.requestFocus();
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      isVerifyingPin = true;
+      gateMessage = null;
+    });
+
+    final result = await api.verifyReporterPin(employeeId, pin);
+    if (!mounted) return;
+
+    final reporter = result["reporter"];
+    if (result["success"] == true && reporter is Map) {
+      final verifiedId =
+          (reporter["reporter_employee_id"]?.toString() ?? employeeId).trim();
+      employeeIdController.text = verifiedId;
+      pinController.clear();
+      setState(() {
+        isVerifyingPin = false;
+        showPin = false;
+        reporterVerified = true;
+        reporterName = reporter["reporter_full_name"]?.toString().trim() ?? "";
+        assignedEquipment = [];
+      });
+      _loadAssignedEquipment(verifiedId);
+      if (!_tourChecked) {
+        _tourChecked = true;
+        _initTour();
+      }
+      return;
+    }
+
+    pinController.clear();
+    setState(() {
+      isVerifyingPin = false;
+      gateMessage = result["message"]?.toString() ??
+          "Could not verify. Please try again.";
+      gateMessageTone =
+          result["code"] == "pending" ? _GateTone.warn : _GateTone.error;
+    });
+    if (result["code"] == "incorrect" || result["code"] == "locked") {
+      HapticFeedback.mediumImpact();
+      _pinShake.forward(from: 0);
+    }
+    _pinFocus.requestFocus();
+  }
+
+  void _openForgotPin() {
+    forgotIdController.text = employeeIdController.text.trim();
+    setState(() {
+      showForgotPin = true;
+      forgotMessage = null;
+      gateMessage = null;
+    });
+  }
+
+  void _backToVerify() {
+    if (employeeIdController.text.trim().isEmpty) {
+      employeeIdController.text = forgotIdController.text.trim();
+    }
+    setState(() => showForgotPin = false);
+  }
+
+  Future<void> _sendForgotPin() async {
+    if (isSendingForgot) return;
+    final employeeId = forgotIdController.text.trim();
     if (employeeId.isEmpty) {
       setState(() {
-        isCheckingReporter = false;
-        reporterVerified = false;
-        reporterName = "";
-        reporterError = null;
+        forgotMessage = "Enter your employee ID.";
+        forgotMessageTone = _GateTone.error;
       });
       return;
     }
 
-    setState(() => isCheckingReporter = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      isSendingForgot = true;
+      forgotMessage = null;
+    });
 
-    final reporter = await api.verifyReporter(employeeId);
+    final result = await api.forgotReporterPin(employeeId);
     if (!mounted) return;
 
-    if (reporter != null &&
-        reporter["reporter_full_name"] != null &&
-        reporter["reporter_full_name"].toString().trim().isNotEmpty) {
-      setState(() {
-        isCheckingReporter = false;
-        reporterVerified = true;
-        reporterName = reporter["reporter_full_name"].toString();
-        reporterError = null;
-        employeeIdError = null;
-      });
-      _loadAssignedEquipment(employeeId);
-    } else {
-      setState(() {
-        isCheckingReporter = false;
-        reporterVerified = false;
-        reporterName = "";
-        assignedEquipment = [];
-        // Keep errors silent until Submit Report validation.
-        reporterError = null;
-      });
-    }
+    final ok = result["success"] == true;
+    setState(() {
+      isSendingForgot = false;
+      forgotMessage = result["message"]?.toString() ??
+          (ok
+              ? "If this employee ID has an email on file, we sent a link to set a new PIN."
+              : "Could not send the link. Please try again.");
+      forgotMessageTone = ok ? _GateTone.info : _GateTone.error;
+    });
+  }
+
+  void _switchReporter() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    unawaited(api.logoutReporter());
+    _returnToGate(clearId: true);
+  }
+
+  /// Back to step 1. The draft list is kept so a re-verified reporter can still send it.
+  void _returnToGate({bool clearId = false, String? message}) {
+    api.clearReporterToken();
+    if (clearId) employeeIdController.clear();
+    pinController.clear();
+    setState(() {
+      reporterVerified = false;
+      reporterName = "";
+      assignedEquipment = [];
+      showForgotPin = false;
+      showPin = false;
+      gateMessage = message;
+      gateMessageTone = _GateTone.error;
+    });
   }
 
   Future<void> _loadAssignedEquipment(String employeeId) async {
@@ -1992,13 +2125,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> scanEquipmentQr() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!reporterVerified) {
-      setState(() {
-        employeeIdError = "Enter a valid Employee ID before scanning.";
-      });
-      scrollToField(employeeKey);
-      return;
-    }
+    if (!reporterVerified) return;
 
     String? scannedName;
     final accepted = await Navigator.push<bool>(
@@ -2387,12 +2514,14 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> confirmSubmitReport() async {
+    var needsReverify = false;
     final submitted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       barrierColor: const Color(0x660F172A),
       builder: (dialogContext) {
         var phase = "confirm";
+        String errorTitle = "Submission failed";
         String errorMessage = "Failed to submit report.";
         String successMessage = "Your maintenance report was sent successfully.";
         var isSending = false;
@@ -2436,6 +2565,14 @@ class _ReportScreenState extends State<ReportScreen> {
                 if (!dialogContext.mounted) return;
 
                 final data = response.data;
+                if (data is Map && data["pin_required"] == true) {
+                  needsReverify = true;
+                  errorTitle = "Verify again";
+                  errorMessage = _reverifyMessage;
+                  isSending = false;
+                  setDialogState(() => phase = "error");
+                  return;
+                }
                 if (response.statusCode != null &&
                     response.statusCode! >= 400) {
                   errorMessage = data is Map
@@ -2489,14 +2626,10 @@ class _ReportScreenState extends State<ReportScreen> {
                     errorMessage = e.message ?? errorMessage;
                   }
 
-                  if (errorMessage.toLowerCase().contains("employee id") &&
-                      mounted) {
-                    setState(() {
-                      reporterVerified = false;
-                      reporterName = "";
-                      reporterError = "Employee ID not found.";
-                      employeeIdError = "Please enter a valid Employee ID.";
-                    });
+                  if (data is Map && data["pin_required"] == true) {
+                    needsReverify = true;
+                    errorTitle = "Verify again";
+                    errorMessage = _reverifyMessage;
                   }
                 }
 
@@ -2646,8 +2779,8 @@ class _ReportScreenState extends State<ReportScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        "Submission failed",
+                      Text(
+                        errorTitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 18,
@@ -2793,37 +2926,31 @@ class _ReportScreenState extends State<ReportScreen> {
       },
     );
 
-    if (submitted == true && mounted) {
+    if (!mounted) return;
+    if (submitted == true) {
+      // Like the web, verification ends after each submitted report.
+      unawaited(api.logoutReporter());
       resetForm();
+    } else if (needsReverify) {
+      _returnToGate(message: _reverifyMessage);
     }
   }
+
+  static const _reverifyMessage =
+      "Your verification expired. Enter your employee ID and PIN again. "
+      "Your equipment list is kept.";
 
   bool validateForm() {
     GlobalKey? firstErrorKey;
     var hasError = false;
 
     setState(() {
-      employeeIdError = null;
-      reporterError = null;
       locationError = null;
       equipmentError = null;
       issueError = null;
       descriptionError = null;
       itemsError = null;
     });
-
-    if (!reporterVerified) {
-      final id = employeeIdController.text.trim();
-      if (id.isEmpty) {
-        employeeIdError = "Please enter a valid Employee ID.";
-        reporterError = null;
-      } else {
-        employeeIdError = "Please enter a valid Employee ID.";
-        reporterError = "Employee ID not found.";
-      }
-      firstErrorKey ??= employeeKey;
-      hasError = true;
-    }
 
     if (selectedItems.isEmpty && selectedRoomId == null) {
       locationError = "Please select a location.";
@@ -2870,14 +2997,17 @@ class _ReportScreenState extends State<ReportScreen> {
 
   void resetForm() {
     employeeIdController.clear();
+    pinController.clear();
     descriptionController.clear();
     equipmentController.clear();
-    _verifyTimer?.cancel();
+    api.clearReporterToken();
 
     setState(() {
       reporterVerified = false;
       reporterName = "";
-      reporterError = null;
+      showForgotPin = false;
+      showPin = false;
+      gateMessage = null;
       assignedEquipment = [];
       selectedRoomId = null;
       selectedLocation = null;
@@ -2890,7 +3020,6 @@ class _ReportScreenState extends State<ReportScreen> {
       equipment.clear();
       selectedItems.clear();
       equipmentNotListed = false;
-      employeeIdError = null;
       locationError = null;
       equipmentError = null;
       issueError = null;
@@ -3652,63 +3781,478 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _statusDot() {
-    Color color = const Color(0xFFCBD5E1);
-    if (isCheckingReporter) {
-      color = const Color(0xFFF59E0B);
-    } else if (reporterVerified) {
-      color = const Color(0xFF22C55E);
-    } else if (employeeIdError != null || reporterError != null) {
-      color = const Color(0xFFEF4444);
-    }
+  static final _employeeIdFormatters = <TextInputFormatter>[
+    FilteringTextInputFormatter.deny(RegExp(r'\s')),
+    LengthLimitingTextInputFormatter(20),
+    const _UpperCaseTextFormatter(),
+  ];
 
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
+  /// Step 1 of 2: employee ID + PIN (or the forgot-PIN form).
+  Widget _buildGate(double topInset) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, topInset + 16, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _amber,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  "CAMPUS REPORT",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: _ink,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Material(
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFFE8ECF4)),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => Navigator.maybePop(context),
+                  child: const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _blue,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: _blue.withValues(alpha: 0.22),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.shield_outlined,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            showForgotPin ? "Forgot your PIN?" : "Verify it's you",
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: _ink,
+            ),
+          ),
+          if (showForgotPin) ...[
+            const SizedBox(height: 6),
+            const Text(
+              "We'll email you a link to set a new PIN.",
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: _muted,
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          if (showForgotPin) ..._forgotPinFields() else ..._verifyFields(),
+          const SizedBox(height: 24),
+          Text(
+            showForgotPin
+                ? "No email on file? Ask the maintenance office to reset your PIN."
+                : "No PIN yet? Check your email or ask the maintenance office.",
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: _placeholder,
+              height: 1.45,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _reporterStatusText() {
-    if (isCheckingReporter) {
-      return const Text(
-        "Verifying employee...",
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: _muted,
+  List<Widget> _verifyFields() => [
+        _buildSectionTitle("Employee ID"),
+        const SizedBox(height: 8),
+        TextField(
+          controller: employeeIdController,
+          readOnly: isVerifyingPin,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.username],
+          inputFormatters: _employeeIdFormatters,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: _ink,
+          ),
+          decoration: _fieldDecoration(
+            hintText: "EMPLOYEE ID",
+            prefixIcon: const Icon(
+              Icons.face_retouching_natural_rounded,
+              color: _blue,
+              size: 22,
+            ),
+          ),
+          onChanged: (_) {
+            if (gateMessage != null) _setGateMessage(null);
+          },
+          onSubmitted: (_) {
+            if (pinController.text.length == 6) {
+              _submitPin();
+            } else {
+              _pinFocus.requestFocus();
+            }
+          },
         ),
-      );
-    }
-    if (reporterVerified && reporterName.isNotEmpty) {
-      return Text(
-        reporterName,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: _ink,
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _buildSectionTitle("PIN")),
+            _gateLink("Forgot PIN?", _openForgotPin),
+          ],
         ),
-      );
-    }
-    if (reporterError != null && employeeIdError != null) {
-      return Text(
-        reporterError!,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFFEF4444),
+        const SizedBox(height: 4),
+        _pinField(),
+        if (isVerifyingPin) ...[
+          const SizedBox(height: 12),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _blue),
+              ),
+              SizedBox(width: 10),
+              Text(
+                "Checking…",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _muted,
+                ),
+              ),
+            ],
+          ),
+        ] else if (gateMessage != null) ...[
+          const SizedBox(height: 12),
+          _gateMessageBox(gateMessage!, gateMessageTone),
+        ],
+      ];
+
+  /// Six dot slots drawn over an invisible field, so the system number
+  /// keyboard, paste and autofill keep working.
+  Widget _pinField() {
+    final pin = pinController.text;
+    final hasError = gateMessage != null && gateMessageTone == _GateTone.error;
+    final focused = _pinFocus.hasFocus;
+
+    return AnimatedBuilder(
+      animation: _pinShake,
+      builder: (context, child) {
+        final t = _pinShake.value;
+        final dx = math.sin(t * math.pi * 6) * 10 * (1 - t);
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(_radius),
+          border: Border.all(
+            color: hasError
+                ? const Color(0xFFEF4444)
+                : focused
+                    ? _blue
+                    : _borderSoft,
+            width: hasError || focused ? 1.4 : 1,
+          ),
         ),
-      );
-    }
-    return const Text(
-      "Waiting for valid Employee ID...",
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w400,
-        color: Color(0xFF94A3B8),
+        child: Row(
+          children: [
+            const SizedBox(width: 48),
+            Expanded(
+              child: Stack(
+                children: [
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < 6; i++)
+                          _pinSlot(i < pin.length ? pin[i] : null),
+                      ],
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: 0,
+                      alwaysIncludeSemantics: true,
+                      child: TextField(
+                        controller: pinController,
+                        focusNode: _pinFocus,
+                        readOnly: isVerifyingPin,
+                        showCursor: false,
+                        enableInteractiveSelection: false,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          counterText: "",
+                        ),
+                        onTap: () => pinController.selection =
+                            TextSelection.collapsed(
+                          offset: pinController.text.length,
+                        ),
+                        onChanged: (value) {
+                          setState(() => gateMessage = null);
+                          if (value.length == 6) _submitPin();
+                        },
+                        onSubmitted: (_) => _submitPin(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              child: IconButton(
+                tooltip: showPin ? "Hide PIN" : "Show PIN",
+                onPressed: () => setState(() => showPin = !showPin),
+                icon: Icon(
+                  showPin
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: _muted,
+                  size: 22,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Grey dot while empty; dark dot (or the digit when shown) once typed.
+  Widget _pinSlot(String? digit) {
+    return SizedBox(
+      width: 26,
+      height: 28,
+      child: Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 120),
+          transitionBuilder: (child, animation) =>
+              ScaleTransition(scale: animation, child: child),
+          child: digit != null && showPin
+              ? Text(
+                  digit,
+                  key: ValueKey("d$digit"),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
+                )
+              : Container(
+                  key: ValueKey(digit == null ? "empty" : "dot"),
+                  width: digit == null ? 8 : 10,
+                  height: digit == null ? 8 : 10,
+                  decoration: BoxDecoration(
+                    color: digit == null ? const Color(0xFFCBD5E1) : _ink,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _forgotPinFields() => [
+        _buildSectionTitle("Employee ID"),
+        const SizedBox(height: 8),
+        TextField(
+          controller: forgotIdController,
+          readOnly: isSendingForgot,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.send,
+          inputFormatters: _employeeIdFormatters,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: _ink,
+          ),
+          decoration: _fieldDecoration(
+            hintText: "EMPLOYEE ID",
+            prefixIcon: const Icon(
+              Icons.face_retouching_natural_rounded,
+              color: _blue,
+              size: 22,
+            ),
+          ),
+          onSubmitted: (_) => _sendForgotPin(),
+        ),
+        if (forgotMessage != null) ...[
+          const SizedBox(height: 12),
+          _gateMessageBox(forgotMessage!, forgotMessageTone),
+        ],
+        const SizedBox(height: 22),
+        _gatePrimaryButton(
+          label: isSendingForgot ? "Sending…" : "Send reset link",
+          busy: isSendingForgot,
+          icon: Icons.mail_outline_rounded,
+          onPressed: _sendForgotPin,
+        ),
+        const SizedBox(height: 8),
+        Center(child: _gateLink("Back to verify", _backToVerify)),
+      ];
+
+  Widget _gateLink(String label, VoidCallback onPressed) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: _blue,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _gatePrimaryButton({
+    required String label,
+    required bool busy,
+    required VoidCallback onPressed,
+    IconData icon = Icons.arrow_forward_rounded,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: FilledButton(
+        onPressed: busy ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: _blue,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: _blue.withValues(alpha: 0.6),
+          disabledForegroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15.5,
+              ),
+            ),
+            const SizedBox(width: 8),
+            busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(icon, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _gateMessageBox(String text, _GateTone tone) {
+    final (fg, bg, icon) = switch (tone) {
+      _GateTone.error => (
+          const Color(0xFFB91C1C),
+          const Color(0xFFFEF2F2),
+          Icons.error_outline_rounded,
+        ),
+      _GateTone.warn => (
+          const Color(0xFF92400E),
+          const Color(0xFFFFFBEB),
+          Icons.hourglass_top_rounded,
+        ),
+      _GateTone.info => (
+          _blue,
+          _blueSoft,
+          Icons.mark_email_read_outlined,
+        ),
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(_radiusSm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: fg),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: fg,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
