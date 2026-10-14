@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
 import '../qr/qr_scanner_screen.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:image_picker/image_picker.dart';
@@ -15,8 +16,6 @@ class ReportScreen extends StatefulWidget {
   @override
   State<ReportScreen> createState() => _ReportScreenState();
 }
-
-enum _EquipmentItemType { listed, manual }
 
 enum _GateTone { error, warn, info }
 
@@ -36,34 +35,46 @@ class _UpperCaseTextFormatter extends TextInputFormatter {
 }
 
 class _ReportEquipmentItem {
-  final _EquipmentItemType type;
-  final int? id;
+  final int id;
   final int roomId;
   final String locationLabel;
   final String displayLabel;
   /// Picked suggested issue; empty means the problem is only in [problemDetails] ("Other").
   final String issue;
   final String problemDetails;
-  final String? manualName;
   final String? openReportTicket;
   /// Raw equipment fields for uniqueness details (long-press).
   final Map<String, dynamic>? details;
+
+  /// Quick-check answers (`{id, answer}`) given before this item was added.
+  final List<Map<String, dynamic>> checks;
 
   /// Optional proof photo for this item (one per item, like the web).
   File? photo;
 
   _ReportEquipmentItem({
-    required this.type,
+    required this.id,
     required this.roomId,
     required this.locationLabel,
     required this.displayLabel,
     required this.issue,
     this.problemDetails = "",
-    this.id,
-    this.manualName,
     this.openReportTicket,
     this.details,
+    this.checks = const [],
   });
+
+  int get triedChecks =>
+      checks.where((check) => check["answer"] == "not_fixed").length;
+}
+
+enum _QuickCheckStatus { done, fixed, cancelled }
+
+class _QuickCheckOutcome {
+  final _QuickCheckStatus status;
+  final List<Map<String, dynamic>> answers;
+
+  const _QuickCheckOutcome(this.status, [this.answers = const []]);
 }
 
 class _ReportScreenState extends State<ReportScreen>
@@ -87,13 +98,11 @@ class _ReportScreenState extends State<ReportScreen>
   Timer? _equipmentSearchTimer;
   final TextEditingController employeeIdController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-  final TextEditingController equipmentController = TextEditingController();
 
   /// Step 1 (employee ID + PIN) passed; the report form (step 2) is shown.
   bool reporterVerified = false;
   String reporterName = "";
   final ApiService api = ApiService();
-  bool equipmentNotListed = false;
 
   final TextEditingController pinController = TextEditingController();
   final TextEditingController forgotIdController = TextEditingController();
@@ -111,11 +120,13 @@ class _ReportScreenState extends State<ReportScreen>
   String? forgotMessage;
   _GateTone forgotMessageTone = _GateTone.info;
   bool _tourChecked = false;
+  bool _addingItem = false;
+  bool showAssigned = false;
+  bool showItems = false;
 
   List<dynamic> suggestedIssues = [];
   int? selectedSuggestedIssueId;
   String? selectedSuggestedIssueName;
-  bool showAllGlobalIssues = false;
 
   List<dynamic> rooms = [];
   int? selectedRoomId;
@@ -145,7 +156,6 @@ class _ReportScreenState extends State<ReportScreen>
   final itemsKey = GlobalKey();
   final assignedKey = GlobalKey();
   final scanKey = GlobalKey();
-  final notListedKey = GlobalKey();
   final addKey = GlobalKey();
   final submitKey = GlobalKey();
 
@@ -204,13 +214,13 @@ class _ReportScreenState extends State<ReportScreen>
           targetKey: employeeKey,
           title: "You're verified",
           body:
-              "Your employee ID was confirmed with your PIN. Not you? Tap Switch reporter.",
+              "Your employee ID was confirmed with your PIN. Not you? Tap Switch.",
         ),
         CoachStep(
           targetKey: assignedKey,
           title: "Your assigned equipment",
           body:
-              "These are issued to you. Tap one to fill in its location and equipment.",
+              "Equipment issued to you. Open the list and tap one to fill in its location and equipment.",
         ),
         CoachStep(
           targetKey: scanKey,
@@ -223,11 +233,6 @@ class _ReportScreenState extends State<ReportScreen>
           title: "Or choose manually",
           body:
               "Pick the room, then the equipment. You can switch rooms anytime — your list is kept.",
-        ),
-        CoachStep(
-          targetKey: notListedKey,
-          title: "Can't find it?",
-          body: "Turn this on and type the equipment name yourself.",
         ),
         CoachStep(
           targetKey: issueKey,
@@ -243,7 +248,7 @@ class _ReportScreenState extends State<ReportScreen>
         ),
         CoachStep(
           targetKey: addKey,
-          title: "Add it to your list",
+          title: "Add it to your report",
           body:
               "Saves the equipment with its issue and details. Repeat for every item, even from other rooms.",
         ),
@@ -251,7 +256,7 @@ class _ReportScreenState extends State<ReportScreen>
           targetKey: itemsKey,
           title: "Your list",
           body:
-              "Each item can have one photo as proof. Long-press an item to see its full details.",
+              "Shows how many items you've added. Tap to open it — each item can have one photo. Long-press one for full details.",
         ),
         CoachStep(
           targetKey: submitKey,
@@ -260,12 +265,6 @@ class _ReportScreenState extends State<ReportScreen>
               "Everything goes out as one report. Priority is set automatically.",
         ),
       ];
-
-  List<dynamic> get visibleSuggestedIssues {
-    if (!equipmentNotListed) return suggestedIssues;
-    if (showAllGlobalIssues) return suggestedIssues;
-    return suggestedIssues.take(5).toList();
-  }
 
   String formatRoomLocationLabel(dynamic room) {
     final map = room is Map ? Map<String, dynamic>.from(room) : <String, dynamic>{};
@@ -331,10 +330,7 @@ class _ReportScreenState extends State<ReportScreen>
     return ticket.isEmpty ? null : ticket;
   }
 
-  Set<int> get _addedEquipmentIds => selectedItems
-      .where((e) => e.type == _EquipmentItemType.listed && e.id != null)
-      .map((e) => e.id!)
-      .toSet();
+  Set<int> get _addedEquipmentIds => selectedItems.map((e) => e.id).toSet();
 
   List<dynamic> get _availableEquipment => equipment.where((item) {
         final id = _equipmentIdOf(item);
@@ -352,8 +348,6 @@ class _ReportScreenState extends State<ReportScreen>
     String? displayLabel,
     String? issue,
     String? problemDetails,
-    String? manualName,
-    bool isManual = false,
   }) {
     final rows = <(String, String)>[];
     final map = details ?? <String, dynamic>{};
@@ -364,21 +358,16 @@ class _ReportScreenState extends State<ReportScreen>
       rows.add((label, text));
     }
 
-    if (isManual) {
-      add("Equipment name", manualName ?? displayLabel);
-      add("Entry type", "Manual entry");
-    } else {
-      add("Name", map["equipment_name"] ?? displayLabel);
-      add("Category", map["equipment_category_name"] ?? map["category"]);
-      add("Asset tag", map["equipment_asset_tag"]);
-      add("Serial number", map["equipment_serial_number"]);
-      add("Brand", map["equipment_brand_name"]);
-      add("Model", map["equipment_model"]);
-      add("Placement zone", map["equipment_placement_zone"]);
-      add("Equipment ID", _equipmentCode(map["equipment_id"]));
-      add("Open report", map["open_report_ticket_code"]);
-      add("Report status", map["open_report_status"]);
-    }
+    add("Name", map["equipment_name"] ?? displayLabel);
+    add("Category", map["equipment_category_name"] ?? map["category"]);
+    add("Asset tag", map["equipment_asset_tag"]);
+    add("Serial number", map["equipment_serial_number"]);
+    add("Brand", map["equipment_brand_name"]);
+    add("Model", map["equipment_model"]);
+    add("Placement zone", map["equipment_placement_zone"]);
+    add("Equipment ID", _equipmentCode(map["equipment_id"]));
+    add("Open report", map["open_report_ticket_code"]);
+    add("Report status", map["open_report_status"]);
 
     if (issue != null && issue.trim().isNotEmpty) {
       add("Issue", issue);
@@ -398,16 +387,12 @@ class _ReportScreenState extends State<ReportScreen>
     String? displayLabel,
     String? issue,
     String? problemDetails,
-    String? manualName,
-    bool isManual = false,
   }) async {
     final rows = _uniquenessRows(
       details: details,
       displayLabel: displayLabel,
       issue: issue,
       problemDetails: problemDetails,
-      manualName: manualName,
-      isManual: isManual,
     );
 
     if (!mounted) return;
@@ -558,9 +543,56 @@ class _ReportScreenState extends State<ReportScreen>
   String get _draftDetails => descriptionController.text.trim();
 
   /// Details describe one item, so the box only opens once equipment is chosen.
-  bool get _canWriteDetails => equipmentNotListed
-      ? equipmentController.text.trim().isNotEmpty
-      : selectedEquipmentId != null;
+  bool get _canWriteDetails => selectedEquipmentId != null;
+
+  bool get _draftPicked => selectedEquipmentId != null;
+
+  /// Ready once the item has equipment plus an issue or details.
+  bool get _draftReady =>
+      _draftPicked && (_draftIssue.isNotEmpty || _draftDetails.isNotEmpty);
+
+  /// Faded until ready but still tappable, so the reporter is told what's missing.
+  Widget _addToReportButton() {
+    final ready = _draftReady;
+    return Column(
+      children: [
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: ready ? 1 : 0.45,
+          child: SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: addEquipmentItem,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: const Color(0xFFEEF2FF),
+                foregroundColor: _blue,
+                side: const BorderSide(color: Color(0xFFC7D2FE), width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_radius),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text(
+                "Add to report",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ),
+        if (!ready) ...[
+          const SizedBox(height: 8),
+          Text(
+            _draftPicked
+                ? "Pick a suggested issue or describe the problem."
+                : "Pick the equipment first.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          ),
+        ],
+      ],
+    );
+  }
 
   String _issueLabel(_ReportEquipmentItem item) =>
       item.issue.isEmpty ? "Other" : item.issue;
@@ -617,7 +649,6 @@ class _ReportScreenState extends State<ReportScreen>
             ),
             const SizedBox(height: 10),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 40,
@@ -641,30 +672,15 @@ class _ReportScreenState extends State<ReportScreen>
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Maintenance Report",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                          height: 1.15,
-                          color: _ink,
-                        ),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        "Report room, facility, or equipment concerns.",
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _muted,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    "Maintenance Report",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                      height: 1.15,
+                      color: _ink,
+                    ),
                   ),
                 ),
                 Material(
@@ -719,121 +735,11 @@ class _ReportScreenState extends State<ReportScreen>
             ],
             const SizedBox(height: 22),
 
-            // ── Employee ID ──
-            _buildSectionTitle("Employee ID"),
-            const SizedBox(height: 8),
-            KeyedSubtree(
-              key: employeeKey,
-              child: TextField(
-                controller: employeeIdController,
-                readOnly: true,
-                enableInteractiveSelection: false,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: _ink,
-                ),
-                decoration: _fieldDecoration(
-                  hintText: "EMPLOYEE ID",
-                  prefixIcon: const Icon(
-                    Icons.face_retouching_natural_rounded,
-                    color: _blue,
-                    size: 22,
-                  ),
-                ).copyWith(
-                  fillColor: _soft,
-                  suffixIcon: const Icon(
-                    Icons.lock_outline_rounded,
-                    color: _muted,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.verified_user_outlined,
-                        size: 14,
-                        color: Color(0xFF059669),
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        "Verified with PIN",
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF059669),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                _gateLink("Not you? Switch reporter", _switchReporter),
-              ],
-            ),
-            if (reporterName.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                decoration: BoxDecoration(
-                  color: _blueSoft,
-                  borderRadius: BorderRadius.circular(_radiusSm),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "REPORTER VERIFIED",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: _blue,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.verified_rounded,
-                          size: 18,
-                          color: Color(0xFF22C55E),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            reporterName,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF3C3C3F),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (assignedEquipment.isNotEmpty)
-                      KeyedSubtree(
-                        key: assignedKey,
-                        child: _assignedEquipmentBox(),
-                      ),
-                  ],
-                ),
-              ),
+            // ── Reporter ──
+            KeyedSubtree(key: employeeKey, child: _reporterCard()),
+            if (assignedEquipment.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              KeyedSubtree(key: assignedKey, child: _assignedEquipmentBox()),
             ],
 
             const SizedBox(height: 20),
@@ -898,7 +804,6 @@ class _ReportScreenState extends State<ReportScreen>
                               selectedSuggestedIssueId = null;
                               selectedSuggestedIssueName = null;
                               suggestedIssues.clear();
-                              equipmentController.clear();
                               descriptionController.clear();
                               itemsError = null;
                             });
@@ -912,176 +817,49 @@ class _ReportScreenState extends State<ReportScreen>
                     const Divider(height: 1, thickness: 1, color: _border),
                     KeyedSubtree(
                       key: equipmentKey,
-                      child: equipmentNotListed
-                          ? _textInputRow(
-                              icon: Icons.keyboard_alt_outlined,
-                              controller: equipmentController,
-                              hint: "Enter equipment name manually...",
-                              hintLabel: "Type equipment name",
-                              errorText: equipmentError,
-                              onChanged: (_) {
-                                setState(() => equipmentError = null);
-                              },
-                            )
-                          : _selectRow(
-                              icon: Icons.monitor_outlined,
-                              value: selectedEquipmentLabel,
-                              placeholder: "Select Equipment",
-                              errorText: equipmentError,
-                              onTap: () {
-                                if (selectedRoomId == null) {
-                                  setState(() {
-                                    locationError =
-                                        "Please select a location first.";
-                                  });
-                                  scrollToField(locationKey);
-                                  return;
-                                }
-                                showSelectionPicker(
-                                  title: "Select equipment",
-                                  searchHint: "Search equipment",
-                                  items: _availableEquipment,
-                                  selectedItem: selectedEquipmentId,
-                                  label: formatEquipmentLabel,
-                                  idOf: _equipmentIdOf,
-                                  enableLongPressDetails: true,
-                                  enableCategoryFilter: true,
-                                  onSelected: (item) {
-                                    equipmentError = null;
-                                    final id = _equipmentIdOf(item);
-                                    setState(() {
-                                      selectedEquipmentLabel =
-                                          formatEquipmentLabel(item);
-                                      selectedEquipmentId = id;
-                                      selectedEquipmentDetails =
-                                          _detailsFromEquipment(item);
-                                      selectedSuggestedIssueId = null;
-                                      selectedSuggestedIssueName = null;
-                                    });
-                                    if (id != null) loadSuggestedIssues(id);
-                                  },
-                                );
-                              },
-                            ),
+                      child: _selectRow(
+                        icon: Icons.monitor_outlined,
+                        value: selectedEquipmentLabel,
+                        placeholder: "Select Equipment",
+                        errorText: equipmentError,
+                        onTap: () {
+                          if (selectedRoomId == null) {
+                            setState(() {
+                              locationError = "Please select a location first.";
+                            });
+                            scrollToField(locationKey);
+                            return;
+                          }
+                          showSelectionPicker(
+                            title: "Select equipment",
+                            searchHint: "Search equipment",
+                            items: _availableEquipment,
+                            selectedItem: selectedEquipmentId,
+                            label: formatEquipmentLabel,
+                            idOf: _equipmentIdOf,
+                            enableLongPressDetails: true,
+                            enableCategoryFilter: true,
+                            onSelected: (item) {
+                              equipmentError = null;
+                              final id = _equipmentIdOf(item);
+                              setState(() {
+                                selectedEquipmentLabel =
+                                    formatEquipmentLabel(item);
+                                selectedEquipmentId = id;
+                                selectedEquipmentDetails =
+                                    _detailsFromEquipment(item);
+                                selectedSuggestedIssueId = null;
+                                selectedSuggestedIssueName = null;
+                              });
+                              if (id != null) loadSuggestedIssues(id);
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  key: notListedKey,
-                  child: Material(
-                    color: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: const BorderSide(color: _border),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () async {
-                        final value = !equipmentNotListed;
-                        setState(() {
-                          equipmentNotListed = value;
-                          selectedEquipmentLabel = null;
-                          selectedEquipmentId = null;
-                          selectedEquipmentDetails = null;
-                          equipmentController.clear();
-                          descriptionController.clear();
-                          selectedSuggestedIssueId = null;
-                          selectedSuggestedIssueName = null;
-                          equipmentError = null;
-                          issueError = null;
-                          descriptionError = null;
-                        });
-                        if (value) {
-                          await loadGlobalSuggestedIssues();
-                        } else {
-                          setState(() => suggestedIssues.clear());
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                "Equipment not listed",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  color: _ink,
-                                ),
-                              ),
-                            ),
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              width: 40,
-                              height: 24,
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: equipmentNotListed ? _blue : _border,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              alignment: equipmentNotListed
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                width: 18,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      blurRadius: 3,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  key: addKey,
-                  height: 48,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _blue,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                    ),
-                    onPressed: addEquipmentItem,
-                    child: const Text(
-                      "Add",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
 
             if (itemsError != null && selectedItems.isEmpty) ...[
@@ -1102,185 +880,7 @@ class _ReportScreenState extends State<ReportScreen>
                   ? const SizedBox.shrink()
                   : Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: Column(
-                        children: [
-                          ...selectedItems.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final item = entry.value;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius:
-                                      BorderRadius.circular(_radiusSm),
-                                  onLongPress: () {
-                                    showEquipmentDetailsDialog(
-                                      title: "Equipment details",
-                                      details: item.details,
-                                      displayLabel: item.displayLabel,
-                                      issue: _issueLabel(item),
-                                      problemDetails: item.problemDetails,
-                                      manualName: item.manualName,
-                                      isManual: item.type ==
-                                          _EquipmentItemType.manual,
-                                    );
-                                  },
-                                  child: _softCard(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      14,
-                                      12,
-                                      10,
-                                      12,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                item.displayLabel,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 14,
-                                                  color: _ink,
-                                                ),
-                                              ),
-                                              if (item.locationLabel
-                                                  .isNotEmpty) ...[
-                                                const SizedBox(height: 4),
-                                                Row(
-                                                  children: [
-                                                    const Icon(
-                                                      Icons
-                                                          .location_on_outlined,
-                                                      size: 13,
-                                                      color: _blue,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Expanded(
-                                                      child: Text(
-                                                        item.locationLabel,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style:
-                                                            const TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: _blue,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                "Issue: ${_issueLabel(item)}",
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontSize: 12.5,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: _muted,
-                                                ),
-                                              ),
-                                              if (item.problemDetails
-                                                  .isNotEmpty) ...[
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  "\u201C${item.problemDetails}\u201D",
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 12.5,
-                                                    fontStyle: FontStyle.italic,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: _ink,
-                                                  ),
-                                                ),
-                                              ],
-                                              if ((item.openReportTicket ?? "")
-                                                  .isNotEmpty) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  "Already reported in ${item.openReportTicket} — maintenance will see it flagged as priority.",
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Color(0xFFB45309),
-                                                  ),
-                                                ),
-                                              ],
-                                              const SizedBox(height: 8),
-                                              _itemPhotoControl(item),
-                                            ],
-                                          ),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              selectedItems.removeAt(index);
-                                              itemsError = null;
-                                            });
-                                          },
-                                          style: TextButton.styleFrom(
-                                            foregroundColor:
-                                                const Color(0xFFDC2626),
-                                            backgroundColor:
-                                                const Color(0xFFFEF2F2),
-                                            elevation: 0,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              side: const BorderSide(
-                                                color: Color(0xFFFECACA),
-                                              ),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            "Remove",
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                          if (itemsError != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                itemsError!,
-                                style: const TextStyle(
-                                  color: Color(0xFFEF4444),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                      child: _reportItemsBox(),
                     ),
             ),
 
@@ -1316,12 +916,10 @@ class _ReportScreenState extends State<ReportScreen>
                             size: 20,
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            equipmentNotListed
-                                ? "Loading global suggested issues..."
-                                : "Select equipment first to see suggested issues.",
+                          const Text(
+                            "Select equipment first to see suggested issues.",
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _placeholder,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -1348,7 +946,7 @@ class _ReportScreenState extends State<ReportScreen>
                           SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
-                              children: visibleSuggestedIssues.map((issue) {
+                              children: suggestedIssues.map((issue) {
                                 final id = int.tryParse(
                                   issue["issue_template_id"]?.toString() ??
                                       "",
@@ -1409,52 +1007,6 @@ class _ReportScreenState extends State<ReportScreen>
                               }).toList(),
                             ),
                           ),
-                          if (equipmentNotListed &&
-                              !showAllGlobalIssues &&
-                              suggestedIssues.length > 5)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: TextButton(
-                                onPressed: () {
-                                  showSelectionPicker(
-                                    title: "Select suggested issue",
-                                    searchHint: "Search issues",
-                                    items: suggestedIssues,
-                                    selectedItem: selectedSuggestedIssueId,
-                                    label: (issue) =>
-                                        issue["issue_template_name"]
-                                            ?.toString() ??
-                                        "",
-                                    idOf: (issue) => int.tryParse(
-                                      issue["issue_template_id"]?.toString() ??
-                                          "",
-                                    ),
-                                    onSelected: (issue) {
-                                      setState(() {
-                                        selectedSuggestedIssueId =
-                                            int.tryParse(
-                                          issue["issue_template_id"]
-                                                  ?.toString() ??
-                                              "",
-                                        );
-                                        selectedSuggestedIssueName =
-                                            issue["issue_template_name"]
-                                                ?.toString();
-                                        issueError = null;
-                                        descriptionError = null;
-                                      });
-                                    },
-                                  );
-                                },
-                                child: Text(
-                                  "+${suggestedIssues.length - 5} more issues",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: _blue,
-                                  ),
-                                ),
-                              ),
-                            ),
                           if (issueError != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
@@ -1476,7 +1028,7 @@ class _ReportScreenState extends State<ReportScreen>
 
             // ── Additional details ──
             _buildSectionTitle("Additional details"),
-            const SizedBox(height: 4),
+            /* const SizedBox(height: 4),
             const Text(
               "For the selected equipment · optional if an issue is picked",
               style: TextStyle(
@@ -1484,7 +1036,7 @@ class _ReportScreenState extends State<ReportScreen>
                 fontWeight: FontWeight.w500,
                 color: _placeholder,
               ),
-            ),
+            ), */
             const SizedBox(height: 8),
             KeyedSubtree(
               key: descriptionKey,
@@ -1518,15 +1070,19 @@ class _ReportScreenState extends State<ReportScreen>
                   ),
                 ),
                 onChanged: (_) {
-                  if (descriptionController.text.trim().isNotEmpty) {
-                    setState(() {
+                  setState(() {
+                    if (descriptionController.text.trim().isNotEmpty) {
                       descriptionError = null;
                       issueError = null;
-                    });
-                  }
+                    }
+                  });
                 },
               ),
             ),
+
+            // ── Add to report: last step for each item ──
+            const SizedBox(height: 16),
+            KeyedSubtree(key: addKey, child: _addToReportButton()),
 
             const SizedBox(height: 28),
 
@@ -1550,9 +1106,11 @@ class _ReportScreenState extends State<ReportScreen>
                   }
                 },
                 icon: const Icon(Icons.send_rounded, size: 18),
-                label: const Text(
-                  "Submit Report",
-                  style: TextStyle(
+                label: Text(
+                  selectedItems.isEmpty
+                      ? "Submit Report"
+                      : "Submit Report (${selectedItems.length})",
+                  style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 15.5,
                   ),
@@ -1588,7 +1146,6 @@ class _ReportScreenState extends State<ReportScreen>
     _pinFocus.dispose();
     _pinShake.dispose();
     descriptionController.dispose();
-    equipmentController.dispose();
     scrollController.dispose();
     _issueSearchTimer?.cancel();
     _locationSearchTimer?.cancel();
@@ -1596,7 +1153,7 @@ class _ReportScreenState extends State<ReportScreen>
     super.dispose();
   }
 
-  void addEquipmentItem() {
+  Future<void> addEquipmentItem() async {
     setState(() {
       equipmentError = null;
       issueError = null;
@@ -1611,49 +1168,6 @@ class _ReportScreenState extends State<ReportScreen>
     }
 
     // Validate equipment first so issue errors don't show before a selection.
-    if (equipmentNotListed) {
-      final name = equipmentController.text.trim();
-      if (name.isEmpty) {
-        setState(() => equipmentError = "Please enter the equipment name.");
-        scrollToField(equipmentKey);
-        return;
-      }
-      final exists = selectedItems.any(
-        (item) =>
-            item.type == _EquipmentItemType.manual &&
-            (item.manualName ?? "").toLowerCase() == name.toLowerCase(),
-      );
-      if (exists) {
-        setState(() => equipmentError = "That equipment name is already added.");
-        scrollToField(equipmentKey);
-        return;
-      }
-
-      if (_draftIssue.isEmpty && _draftDetails.isEmpty) {
-        _showMissingIssueError();
-        return;
-      }
-
-      setState(() {
-        selectedItems.add(
-          _ReportEquipmentItem(
-            type: _EquipmentItemType.manual,
-            roomId: selectedRoomId!,
-            locationLabel: selectedLocation ?? "",
-            displayLabel: name,
-            manualName: name,
-            issue: _draftIssue,
-            problemDetails: _draftDetails,
-          ),
-        );
-        equipmentController.clear();
-        selectedSuggestedIssueId = null;
-        selectedSuggestedIssueName = null;
-        descriptionController.clear();
-      });
-      return;
-    }
-
     if (selectedEquipmentId == null ||
         (selectedEquipmentLabel ?? "").trim().isEmpty) {
       setState(() {
@@ -1665,11 +1179,7 @@ class _ReportScreenState extends State<ReportScreen>
       return;
     }
 
-    final exists = selectedItems.any(
-      (item) =>
-          item.type == _EquipmentItemType.listed &&
-          item.id == selectedEquipmentId,
-    );
+    final exists = selectedItems.any((item) => item.id == selectedEquipmentId);
     if (exists) {
       setState(() => equipmentError = "That equipment is already added.");
       scrollToField(equipmentKey);
@@ -1681,21 +1191,73 @@ class _ReportScreenState extends State<ReportScreen>
       return;
     }
 
+    final equipmentId = selectedEquipmentId!;
+    final issue = _draftIssue;
+    var checkAnswers = <Map<String, dynamic>>[];
+
+    if (issue.isNotEmpty) {
+      if (_addingItem) return;
+      _addingItem = true;
+      try {
+        FocusManager.instance.primaryFocus?.unfocus();
+        final checks = await api.getIssueChecks(equipmentId, issue);
+        if (!mounted) return;
+        if (checks.isNotEmpty) {
+          final outcome = await _showQuickChecks(
+            equipmentId: equipmentId,
+            name: _equipmentNameOf(selectedEquipmentDetails) ??
+                selectedEquipmentLabel!,
+            issue: issue,
+            checks: checks,
+          );
+          if (!mounted) return;
+          if (outcome.status == _QuickCheckStatus.cancelled) return;
+          if (outcome.status == _QuickCheckStatus.fixed) {
+            _clearListedDraft();
+            return;
+          }
+          checkAnswers = outcome.answers;
+        }
+      } finally {
+        _addingItem = false;
+      }
+      // The picker may have changed while the checks were open.
+      if (selectedEquipmentId != equipmentId) return;
+    }
+
+    final item = _ReportEquipmentItem(
+      roomId: selectedRoomId!,
+      locationLabel: selectedLocation ?? "",
+      id: equipmentId,
+      displayLabel: selectedEquipmentLabel!,
+      issue: issue,
+      problemDetails: _draftDetails,
+      openReportTicket: _openReportTicketOf(selectedEquipmentDetails ?? {}),
+      details: selectedEquipmentDetails,
+      checks: checkAnswers,
+    );
     setState(() {
-      selectedItems.add(
-        _ReportEquipmentItem(
-          type: _EquipmentItemType.listed,
-          roomId: selectedRoomId!,
-          locationLabel: selectedLocation ?? "",
-          id: selectedEquipmentId,
-          displayLabel: selectedEquipmentLabel!,
-          issue: _draftIssue,
-          problemDetails: _draftDetails,
-          openReportTicket:
-              _openReportTicketOf(selectedEquipmentDetails ?? {}),
-          details: selectedEquipmentDetails,
-        ),
-      );
+      if (selectedItems.isEmpty) showItems = true;
+      selectedItems.add(item);
+    });
+    _clearListedDraft();
+
+    if (!showItems) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              "Added ${_itemShortName(item)} · ${selectedItems.length} in your report.",
+            ),
+          ),
+        );
+    }
+  }
+
+  void _clearListedDraft() {
+    setState(() {
       selectedEquipmentId = null;
       selectedEquipmentLabel = null;
       selectedEquipmentDetails = null;
@@ -1704,6 +1266,35 @@ class _ReportScreenState extends State<ReportScreen>
       suggestedIssues.clear();
       descriptionController.clear();
     });
+  }
+
+  String? _equipmentNameOf(Map<String, dynamic>? details) {
+    final name = details?["equipment_name"]?.toString().trim() ?? "";
+    return name.isEmpty ? null : name;
+  }
+
+  /// Walks the reporter through the issue's quick checks, like the web.
+  Future<_QuickCheckOutcome> _showQuickChecks({
+    required int equipmentId,
+    required String name,
+    required String issue,
+    required List<Map<String, dynamic>> checks,
+  }) async {
+    final outcome = await showDialog<_QuickCheckOutcome>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: const Color(0x660F172A),
+      builder: (_) => _QuickChecksDialog(
+        name: name,
+        issue: issue,
+        checks: checks,
+        onFixed: (checkId) => api.reportSelfFixed(
+          equipmentId: equipmentId,
+          checkId: checkId,
+        ),
+      ),
+    );
+    return outcome ?? const _QuickCheckOutcome(_QuickCheckStatus.cancelled);
   }
 
   void _showMissingIssueError() {
@@ -1951,38 +1542,450 @@ class _ReportScreenState extends State<ReportScreen>
     );
   }
 
-  Widget _assignedEquipmentBox() {
-    final added = _addedEquipmentIds;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  /// Verified reporter in one row: name, employee ID, and a way to switch.
+  Widget _reporterCard() {
+    final employeeId = employeeIdController.text.trim();
+    final title = reporterName.isNotEmpty ? reporterName : employeeId;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: _blueSoft,
+        borderRadius: BorderRadius.circular(_radiusSm),
+      ),
+      child: Row(
         children: [
-          const Text.rich(
-            TextSpan(
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFECFDF5),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_user_rounded,
+              size: 20,
+              color: Color(0xFF059669),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextSpan(
-                  text: "EQUIPMENT ASSIGNED TO YOU",
-                  style: TextStyle(
-                    fontSize: 10.5,
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                    color: _muted,
+                    color: _ink,
                   ),
                 ),
-                TextSpan(
-                  text: "  · tap one to report it",
-                  style: TextStyle(
-                    fontSize: 11,
+                const SizedBox(height: 2),
+                Text(
+                  reporterName.isNotEmpty
+                      ? "$employeeId · Verified with PIN"
+                      : "Verified with PIN",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: _placeholder,
+                    color: _muted,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
+          _gateLink("Switch", _switchReporter),
+        ],
+      ),
+    );
+  }
+
+  /// Collapsed to one row so it doesn't push the form down.
+  Widget _assignedEquipmentBox() {
+    final added = _addedEquipmentIds;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_radiusSm),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(_radiusSm),
+            onTap: () => setState(() => showAssigned = !showAssigned),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.inventory_2_outlined,
+                    size: 18,
+                    color: _blue,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Your assigned equipment (${assignedEquipment.length})",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: showAssigned ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: _muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            alignment: Alignment.topCenter,
+            child: !showAssigned
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Tap one to report it.",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: _placeholder,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _assignedEquipmentChips(added),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _itemShortName(_ReportEquipmentItem item) =>
+      _equipmentNameOf(item.details) ?? item.displayLabel.split(" · ").first;
+
+  /// Items already added, folded into one row so the form stays short.
+  Widget _reportItemsBox() {
+    final count = selectedItems.length;
+    final names = selectedItems.map(_itemShortName).toList();
+    final summary = names.length <= 2
+        ? names.join(", ")
+        : "${names.take(2).join(", ")} +${names.length - 2} more";
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_radiusSm),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(_radiusSm),
+            onTap: () => setState(() => showItems = !showItems),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.assignment_outlined,
+                    size: 18,
+                    color: _blue,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              "In your report",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _ink,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _blue,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                "$count",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!showItems) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            summary,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                              color: _placeholder,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: showItems ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: _muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            alignment: Alignment.topCenter,
+            child: !showItems
+                ? const SizedBox(width: double.infinity)
+                : Column(
+                    children: [
+                      for (var i = 0; i < count; i++) ...[
+                        const Divider(height: 1, thickness: 1, color: _border),
+                        _reportItemRow(i, selectedItems[i]),
+                      ],
+                    ],
+                  ),
+          ),
+          if (itemsError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Text(
+                itemsError!,
+                style: const TextStyle(
+                  color: Color(0xFFEF4444),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _reportItemRow(int index, _ReportEquipmentItem item) {
+    final ticket = item.openReportTicket ?? "";
+    final tried = item.triedChecks;
+    final meta = [
+      "Issue: ${_issueLabel(item)}",
+      if (tried > 0) "Tried $tried check${tried == 1 ? "" : "s"}",
+    ].join(" · ");
+
+    return InkWell(
+      onLongPress: () {
+        showEquipmentDetailsDialog(
+          title: "Equipment details",
+          details: item.details,
+          displayLabel: item.displayLabel,
+          issue: _issueLabel(item),
+          problemDetails: item.problemDetails,
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 2, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.displayLabel,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      color: _ink,
+                    ),
+                  ),
+                  if (item.locationLabel.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 12,
+                          color: _blue,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.locationLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: _blue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 3),
+                  Text(
+                    meta,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
+                  ),
+                  if (item.problemDetails.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      "\u201C${item.problemDetails}\u201D",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        color: _ink,
+                      ),
+                    ),
+                  ],
+                  if (ticket.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _alreadyReportedBadge(ticket),
+                  ],
+                  const SizedBox(height: 8),
+                  _itemPhotoControl(item),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: "Remove",
+              onPressed: () => _removeItem(index),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 20,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _alreadyReportedBadge(String ticket) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 13,
+            color: Color(0xFFB45309),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              "Already reported · $ticket",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFB45309),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeItem(int index) {
+    final item = selectedItems[index];
+    setState(() {
+      selectedItems.removeAt(index);
+      itemsError = null;
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text("Removed ${_itemShortName(item)}."),
+          action: SnackBarAction(
+            label: "Undo",
+            onPressed: () {
+              if (!mounted || selectedItems.any((e) => e.id == item.id)) {
+                return;
+              }
+              setState(() {
+                selectedItems.insert(
+                  math.min(index, selectedItems.length),
+                  item,
+                );
+              });
+            },
+          ),
+        ),
+      );
+  }
+
+  Widget _assignedEquipmentChips(Set<int> added) {
+    return Wrap(
             spacing: 6,
             runSpacing: 6,
             children: assignedEquipment.map((item) {
@@ -2050,10 +2053,7 @@ class _ReportScreenState extends State<ReportScreen>
                 ),
               );
             }).toList(),
-          ),
-        ],
-      ),
-    );
+          );
   }
 
   Widget _scanQrButton() {
@@ -2201,9 +2201,7 @@ class _ReportScreenState extends State<ReportScreen>
     if (!mounted) return null;
 
     setState(() {
-      if (roomChanged || equipmentNotListed) descriptionController.clear();
-      equipmentNotListed = false;
-      equipmentController.clear();
+      if (roomChanged) descriptionController.clear();
       selectedRoomId = roomId;
       selectedLocation = room != null
           ? formatRoomLocationLabel(room)
@@ -2230,18 +2228,6 @@ class _ReportScreenState extends State<ReportScreen>
       suggestedIssues = data;
       selectedSuggestedIssueId = null;
       selectedSuggestedIssueName = null;
-      showAllGlobalIssues = false;
-    });
-  }
-
-  Future<void> loadGlobalSuggestedIssues() async {
-    final data = await api.getGlobalSuggestedIssues();
-    if (!mounted) return;
-    setState(() {
-      suggestedIssues = data;
-      selectedSuggestedIssueId = null;
-      selectedSuggestedIssueName = null;
-      showAllGlobalIssues = false;
     });
   }
 
@@ -2534,32 +2520,23 @@ class _ReportScreenState extends State<ReportScreen>
               setDialogState(() => phase = "submitting");
 
               try {
-                final totalItems = selectedItems.length;
-                final listed = selectedItems
-                    .where((e) => e.type == _EquipmentItemType.listed)
-                    .toList();
-                final manuals = selectedItems
-                    .where((e) => e.type == _EquipmentItemType.manual)
-                    .toList();
+                final items = selectedItems;
+                final totalItems = items.length;
 
                 final response = await api.submitReport(
                   employeeId: employeeIdController.text.trim(),
-                  roomId: selectedItems.first.roomId,
-                  equipmentIds: listed.map((e) => e.id!).toList(),
-                  equipmentIssues: listed.map((e) => e.issue).toList(),
+                  roomId: items.first.roomId,
+                  equipmentIds: items.map((e) => e.id).toList(),
+                  equipmentIssues: items.map((e) => e.issue).toList(),
                   equipmentDetails:
-                      listed.map((e) => e.problemDetails).toList(),
-                  manualEquipmentNames:
-                      manuals.map((e) => e.manualName!).toList(),
-                  manualEquipmentIssues: manuals.map((e) => e.issue).toList(),
-                  manualEquipmentDetails:
-                      manuals.map((e) => e.problemDetails).toList(),
-                  manualEquipmentRooms: manuals.map((e) => e.roomId).toList(),
+                      items.map((e) => e.problemDetails).toList(),
+                  equipmentChecks: items
+                      .map((e) => e.checks.isEmpty ? "" : jsonEncode(e.checks))
+                      .toList(),
                   equipmentPhotos: {
-                    for (final e in listed)
-                      if (e.photo != null) e.id!: e.photo!,
+                    for (final e in items)
+                      if (e.photo != null) e.id: e.photo!,
                   },
-                  manualEquipmentPhotos: manuals.map((e) => e.photo).toList(),
                 );
 
                 if (!dialogContext.mounted) return;
@@ -2999,7 +2976,6 @@ class _ReportScreenState extends State<ReportScreen>
     employeeIdController.clear();
     pinController.clear();
     descriptionController.clear();
-    equipmentController.clear();
     api.clearReporterToken();
 
     setState(() {
@@ -3019,7 +2995,7 @@ class _ReportScreenState extends State<ReportScreen>
       suggestedIssues.clear();
       equipment.clear();
       selectedItems.clear();
-      equipmentNotListed = false;
+      showItems = false;
       locationError = null;
       equipmentError = null;
       issueError = null;
@@ -3594,22 +3570,6 @@ class _ReportScreenState extends State<ReportScreen>
     );
   }
 
-  Widget _softCard({
-    required Widget child,
-    EdgeInsetsGeometry? padding,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_radiusSm),
-        border: Border.all(color: _border),
-      ),
-      child: child,
-    );
-  }
-
   Widget _selectRow({
     required IconData icon,
     required String placeholder,
@@ -3703,80 +3663,6 @@ class _ReportScreenState extends State<ReportScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _textInputRow({
-    required IconData icon,
-    required TextEditingController controller,
-    required String hint,
-    String hintLabel = "Type equipment name",
-    String? errorText,
-    required ValueChanged<String> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: _soft,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: const Color(0xFF64748B), size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hintLabel,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF94A3B8),
-                    height: 1.2,
-                  ),
-                ),
-                TextField(
-                  controller: controller,
-                  onChanged: onChanged,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0F172A),
-                  ),
-                  decoration: InputDecoration(
-                    hintText: hint,
-                    errorText: errorText,
-                    hintStyle: const TextStyle(
-                      color: _placeholder,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 15,
-                    ),
-                    errorStyle: const TextStyle(
-                      color: Color(0xFFEF4444),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -4301,6 +4187,424 @@ class _ReportScreenState extends State<ReportScreen>
         borderRadius: BorderRadius.circular(_radius),
         borderSide: const BorderSide(color: Color(0xFFEF4444)),
       ),
+    );
+  }
+}
+
+/// Quick checks shown after picking a suggested issue, before the item is added.
+/// "That fixed it" ends with no report; a safety "Yes" goes straight to the report.
+class _QuickChecksDialog extends StatefulWidget {
+  final String name;
+  final String issue;
+  final List<Map<String, dynamic>> checks;
+  final void Function(int checkId) onFixed;
+
+  const _QuickChecksDialog({
+    required this.name,
+    required this.issue,
+    required this.checks,
+    required this.onFixed,
+  });
+
+  @override
+  State<_QuickChecksDialog> createState() => _QuickChecksDialogState();
+}
+
+enum _QuickCheckPanel { step, fixed, danger }
+
+class _QuickChecksDialogState extends State<_QuickChecksDialog> {
+  static const _ink = Color(0xFF1A1A2E);
+  static const _muted = Color(0xFF6B7280);
+  static const _blue = Color(0xFF0025CC);
+  static const _border = Color(0xFFE5E7EB);
+  static const _green = Color(0xFF059669);
+  static const _red = Color(0xFFDC2626);
+
+  int index = 0;
+  late final List<Map<String, dynamic>?> answers =
+      List.filled(widget.checks.length, null);
+  _QuickCheckPanel panel = _QuickCheckPanel.step;
+  String dangerText = "";
+
+  Map<String, dynamic> get check => widget.checks[index];
+
+  bool get isQuestion => check["kind"] == "question";
+
+  int? _idOf(Map<String, dynamic> check) =>
+      int.tryParse(check["id"]?.toString() ?? "");
+
+  List<Map<String, dynamic>> get _givenAnswers => answers
+      .take(index + 1)
+      .whereType<Map<String, dynamic>>()
+      .toList();
+
+  void _answer(String answer) {
+    final id = _idOf(check);
+    answers[index] = {"id": id, "answer": answer};
+
+    if (answer == "fixed") {
+      if (id != null) widget.onFixed(id);
+      setState(() => panel = _QuickCheckPanel.fixed);
+      return;
+    }
+
+    if (check["safety"] == true && answer == "yes") {
+      final hint = check["hint"]?.toString().trim() ?? "";
+      setState(() {
+        dangerText = "${hint.isEmpty ? "" : "$hint "}"
+            "Maintenance will get this report as Critical.";
+        panel = _QuickCheckPanel.danger;
+      });
+      return;
+    }
+
+    if (index + 1 < widget.checks.length) {
+      setState(() => index += 1);
+      return;
+    }
+
+    _finish(_QuickCheckStatus.done);
+  }
+
+  void _finish(_QuickCheckStatus status) {
+    Navigator.of(context).pop(
+      _QuickCheckOutcome(
+        status,
+        status == _QuickCheckStatus.cancelled ? const [] : _givenAnswers,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(),
+              const SizedBox(height: 14),
+              switch (panel) {
+                _QuickCheckPanel.step => _stepPanel(),
+                _QuickCheckPanel.fixed => _resultPanel(
+                    icon: Icons.check_rounded,
+                    color: _green,
+                    background: const Color(0xFFECFDF5),
+                    title: "Great, it works now",
+                    text:
+                        "No report needed for this equipment. Thanks for checking first.",
+                    buttonLabel: "Done",
+                    buttonColor: _blue,
+                    onPressed: () => _finish(_QuickCheckStatus.fixed),
+                  ),
+                _QuickCheckPanel.danger => _resultPanel(
+                    icon: Icons.warning_amber_rounded,
+                    color: _red,
+                    background: const Color(0xFFFEF2F2),
+                    title: "Report this right away",
+                    text: dangerText,
+                    buttonLabel: "Add to report",
+                    buttonColor: _red,
+                    onPressed: () => _finish(_QuickCheckStatus.done),
+                  ),
+              },
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "QUICK CHECKS",
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: _blue,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                "Let's try a few things first",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                "${widget.name} · ${widget.issue}",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: _muted),
+              ),
+            ],
+          ),
+        ),
+        Material(
+          color: Colors.white,
+          shape: const CircleBorder(side: BorderSide(color: _border)),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => _finish(_QuickCheckStatus.cancelled),
+            child: const SizedBox(
+              width: 34,
+              height: 34,
+              child: Icon(Icons.close_rounded, size: 18, color: _muted),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stepPanel() {
+    final hint = check["hint"]?.toString().trim() ?? "";
+    final buttons = isQuestion
+        ? [
+            _answerButton("Yes", "yes"),
+            _answerButton("No", "no"),
+          ]
+        : [
+            _answerButton(
+              "That fixed it",
+              "fixed",
+              background: const Color(0xFFECFDF5),
+              foreground: _green,
+              borderColor: const Color(0xFFA7F3D0),
+            ),
+            _answerButton(
+              "Still not working",
+              "not_fixed",
+              background: _blue,
+              foreground: Colors.white,
+              borderColor: _blue,
+            ),
+          ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            for (var i = 0; i < widget.checks.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: i < index
+                        ? _blue
+                        : i == index
+                            ? const Color(0xFFA5B4FC)
+                            : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          "Step ${index + 1} of ${widget.checks.length}",
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: _muted,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          check["question"]?.toString() ?? "",
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: _ink,
+            height: 1.3,
+          ),
+        ),
+        if (hint.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFEEF2F7)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.lightbulb_outline_rounded,
+                  size: 16,
+                  color: Color(0xFFF59E0B),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    hint,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF475569),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: buttons[0]),
+            const SizedBox(width: 10),
+            Expanded(child: buttons[1]),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Visibility(
+              visible: index > 0,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: TextButton(
+                onPressed: () => setState(() => index -= 1),
+                style: TextButton.styleFrom(
+                  foregroundColor: _blue,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  "Back",
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                "If one fixes it, you won't need to report.",
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _answerButton(
+    String label,
+    String answer, {
+    Color background = Colors.white,
+    Color foreground = _ink,
+    Color borderColor = _border,
+  }) {
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton(
+        onPressed: () => _answer(answer),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          side: BorderSide(color: borderColor),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  Widget _resultPanel({
+    required IconData icon,
+    required Color color,
+    required Color background,
+    required String title,
+    required String text,
+    required String buttonLabel,
+    required Color buttonColor,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      children: [
+        const SizedBox(height: 6),
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 28),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: _ink,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: _muted, height: 1.4),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: FilledButton(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: buttonColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              buttonLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

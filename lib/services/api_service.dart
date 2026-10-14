@@ -4,7 +4,7 @@ import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.1.18:8000/api";
+  static const String baseUrl = "http://192.168.1.19:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -231,6 +231,46 @@ class ApiService {
     return [];
   }
 
+  /// Quick checks for the picked issue on this equipment; empty when there are none.
+  Future<List<Map<String, dynamic>>> getIssueChecks(
+    int equipmentId,
+    String issue,
+  ) async {
+    try {
+      final response = await dio.get(
+        "$baseUrl/issue-checks/$equipmentId",
+        queryParameters: {"issue": issue},
+        options: Options(validateStatus: (s) => s != null && s < 500),
+      );
+      final data = response.data;
+      final checks = data is Map ? data["checks"] : null;
+      if (response.statusCode == 200 && checks is List) {
+        return checks
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  /// Logs that a quick check fixed the problem, so no report was needed.
+  Future<void> reportSelfFixed({
+    required int equipmentId,
+    required int checkId,
+  }) async {
+    try {
+      await dio.post(
+        "$baseUrl/report-checks/self-fixed",
+        data: {"equipment_id": equipmentId, "check_id": checkId},
+        options: _reporterOptions(
+          base: Options(validateStatus: (s) => s != null && s < 500),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<List<dynamic>> getGlobalSuggestedIssues() async {
     try {
       final response = await dio.get(
@@ -254,6 +294,7 @@ class ApiService {
     List<int> equipmentIds = const [],
     List<String> equipmentIssues = const [],
     List<String> equipmentDetails = const [],
+    List<String> equipmentChecks = const [],
     List<String> manualEquipmentNames = const [],
     List<String> manualEquipmentIssues = const [],
     List<String> manualEquipmentDetails = const [],
@@ -288,6 +329,11 @@ class ApiService {
 
     for (final details in equipmentDetails) {
       formData.fields.add(MapEntry("equipment_details[]", details));
+    }
+
+    // Quick-check answers as JSON, parallel to equipment_ids ("" when none).
+    for (final checks in equipmentChecks) {
+      formData.fields.add(MapEntry("equipment_checks[]", checks));
     }
 
     for (final details in manualEquipmentDetails) {
