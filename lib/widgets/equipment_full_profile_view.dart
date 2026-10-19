@@ -37,7 +37,7 @@ class EquipmentOverviewSections extends StatelessWidget {
             ("Model", p.model),
             ("Serial", p.serialNumber),
             ("Asset tag", p.assetTag),
-            ("Category", p.category),
+            ("Classification", p.category),
             ("Qty / Mode", "${p.quantity} · ${p.trackingMode ?? "Individual"}"),
             ("Condition", p.conditionStatus),
             ("Status", p.inventoryStatus),

@@ -622,7 +622,7 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
       key: const ValueKey("overview"),
       children: [
         _Kv(label: "Location", value: _equipment.room),
-        _Kv(label: "Category", value: _equipment.category),
+        _Kv(label: "Classification", value: _equipment.category),
         _Kv(label: "Condition", value: _equipment.condition),
         _Kv(label: "Status", value: _equipment.status),
         _Kv(label: "Warranty", value: _equipment.warranty),

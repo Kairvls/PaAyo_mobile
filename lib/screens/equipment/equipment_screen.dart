@@ -810,7 +810,7 @@ class _EquipmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "Overall Ratings",
+                          "Condition",
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w400,
@@ -820,12 +820,7 @@ class _EquipmentCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.star_rounded,
-                              size: 16,
-                              color: Color(0xFFFBBF24),
-                            ),
-                            const SizedBox(width: 4),
+                            
                             Flexible(
                               child: Text.rich(
                                 TextSpan(

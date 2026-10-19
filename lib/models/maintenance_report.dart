@@ -108,7 +108,8 @@ class MaintenanceReportItem {
   bool get isTerminal =>
       status == "Resolved" ||
       status == "For Replacement" ||
-      status == "Rejected";
+      status == "Rejected" ||
+      status == "Closed / Cancelled";
 
   /// Detail rows for the equipment profile grid (matches web full profile).
   List<MapEntry<String, String>> get profileRows {
@@ -120,10 +121,10 @@ class MaintenanceReportItem {
       MapEntry("Model", dash(model)),
       MapEntry("Serial number", dash(serialNumber)),
       MapEntry("Asset tag", dash(assetTag)),
-      MapEntry("Category", dash(category)),
+      MapEntry("Classification", dash(category)),
       MapEntry("Qty / Mode", dash(qtyMode ?? quantity)),
       MapEntry("Condition", dash(condition)),
-      MapEntry("Inventory status", dash(inventoryStatus)),
+      MapEntry("Status", dash(inventoryStatus)),
       MapEntry("Warranty expiration", dash(warrantyExpiration)),
       MapEntry("Received", dash(acquiredDate)),
       MapEntry("Room", dash(room)),
@@ -145,7 +146,11 @@ class MaintenanceReport {
   final int id;
   final String ticketCode;
   final String status;
+  /// Legacy Urgent / Non-Urgent from API (kept for compatibility).
   final String urgency;
+  /// Critical / High / Medium / Low (from API `severity`, else derived).
+  final String priority;
+  final String? priorityReason;
   final String room;
   final int? roomId;
   final String equipmentDisplay;
@@ -169,6 +174,8 @@ class MaintenanceReport {
     required this.ticketCode,
     required this.status,
     required this.urgency,
+    required this.priority,
+    this.priorityReason,
     required this.room,
     this.roomId,
     required this.equipmentDisplay,
@@ -211,11 +218,20 @@ class MaintenanceReport {
             .toList()
         : <MaintenanceReportItem>[];
 
+    final urgency = s(json["urgency"], "Non-Urgent");
+    final severityRaw = s(json["severity"]);
+    const levels = {"Critical", "High", "Medium", "Low"};
+    final priority = levels.contains(severityRaw)
+        ? severityRaw
+        : (urgency == "Urgent" ? "High" : "Medium");
+
     return MaintenanceReport(
       id: int.tryParse(json["id"]?.toString() ?? "") ?? 0,
       ticketCode: s(json["ticket_code"], "RPT"),
       status: s(json["status"], "Pending"),
-      urgency: s(json["urgency"], "Non-Urgent"),
+      urgency: urgency,
+      priority: priority,
+      priorityReason: json["severity_reason"]?.toString(),
       room: s(json["room"]),
       roomId: int.tryParse(json["room_id"]?.toString() ?? ""),
       equipmentDisplay: s(json["equipment_display"], "Not specified"),

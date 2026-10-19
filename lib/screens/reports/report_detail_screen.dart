@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 
+import 'package:flutter/services.dart';
+
 import '../../models/maintenance_report.dart';
 import '../../services/maintenance_service.dart';
+import '../../utils/input_limits.dart';
+import '../../utils/report_status.dart';
 import '../../widgets/report_photo_attachment.dart';
 import '../../widgets/sweet_alert.dart';
 
@@ -111,10 +115,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   List<String> _allowedStatuses(MaintenanceReport report) {
     switch (report.status) {
-      case "Pending":
-        return const ["Processing", "Rejected"];
-      case "Processing":
-        return const ["Resolved", "For Replacement"];
+      case ReportStatuses.pending:
+        return const [
+          ReportStatuses.processing,
+          ReportStatuses.rejected,
+          ReportStatuses.closedCancelled,
+        ];
+      case ReportStatuses.processing:
+        return const [
+          ReportStatuses.forReplacement,
+          ReportStatuses.resolved,
+          ReportStatuses.rejected,
+          ReportStatuses.closedCancelled,
+        ];
+      case ReportStatuses.forReplacement:
+        return const [
+          ReportStatuses.resolved,
+          ReportStatuses.closedCancelled,
+        ];
       default:
         return const [];
     }
@@ -122,29 +140,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   bool _canUpdate(MaintenanceReport report) {
     if (_allowedStatuses(report).isEmpty) return false;
-    if (report.status == "Processing") {
+    if (report.status == ReportStatuses.processing ||
+        report.status == ReportStatuses.forReplacement) {
       return report.assignedPersonnelId != null &&
           report.assignedPersonnelId == _personnelId;
     }
     return true;
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case "Pending":
-        return const Color(0xFFF59E0B);
-      case "Processing":
-        return const Color(0xFF7C3AED);
-      case "Resolved":
-        return const Color(0xFF16A34A);
-      case "For Replacement":
-        return const Color(0xFFEA580C);
-      case "Rejected":
-        return const Color(0xFFDC2626);
-      default:
-        return _muted;
-    }
-  }
+  Color _statusColor(String status) => ReportStatuses.color(status);
 
   bool _mustSelectEquipment(MaintenanceReport report) {
     return report.status == "Processing" &&
@@ -223,6 +227,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         iconColor = const Color(0xFFEA580C);
         confirmLabel = "Submit";
         break;
+      case "Closed / Cancelled":
+        title = "Close / cancel report?";
+        message =
+            "This will close the report for $equipmentLine as an administrative close. This action cannot be undone.";
+        icon = Icons.cancel_outlined;
+        iconBg = const Color(0xFFF1F5F9);
+        iconColor = const Color(0xFF64748B);
+        confirmLabel = "Close";
+        break;
       default:
         title = "Update status?";
         message = "Change this report to $status?";
@@ -235,7 +248,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     if (remarks.isNotEmpty &&
         (status == "Resolved" ||
             status == "For Replacement" ||
-            status == "Rejected")) {
+            status == "Rejected" ||
+            status == "Closed / Cancelled")) {
       message = "$message\n\nRemarks: $remarks";
     }
 
@@ -513,7 +527,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 subtitle: report.equipmentDisplay,
                 children: [
                   _RowLabel("Status", report.status),
-                  _RowLabel("Urgency", report.urgency),
+                  _RowLabel("Priority", report.priority),
+                  if (report.priorityReason != null &&
+                      report.priorityReason!.trim().isNotEmpty)
+                    _RowLabel("Priority reason", report.priorityReason!),
                   _RowLabel("Issue", report.issueDisplay),
                   if (report.room.isNotEmpty) _RowLabel("Room", report.room),
                   if (report.reporterName != null)
@@ -633,13 +650,37 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _submitting
+                              ? null
+                              : () => _submitStatus(
+                                    report,
+                                    ReportStatuses.closedCancelled,
+                                  ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF64748B),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            "Close / Cancel",
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
                         report.isMultiItem
                             ? "After starting, you can resolve or send individual equipment for replacement."
                             : "Starting this report will make you responsible for handling it.",
                         style: const TextStyle(color: _muted, fontSize: 12),
                       ),
-                    ] else if (report.status == "Processing") ...[
+                    ] else if (report.status == ReportStatuses.processing ||
+                        report.status == ReportStatuses.forReplacement) ...[
                       DropdownButtonFormField<String>(
                         value: _selectedStatus,
                         decoration: InputDecoration(
@@ -686,6 +727,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         controller: _remarks,
                         minLines: 2,
                         maxLines: 4,
+                        maxLength: InputLimits.remarks,
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(InputLimits.remarks),
+                        ],
+                        buildCounter: (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          maxLength,
+                        }) =>
+                            null,
                         decoration: InputDecoration(
                           hintText: "Remarks (optional)",
                           filled: true,
@@ -730,7 +782,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    report.status == "Processing"
+                    report.status == ReportStatuses.processing ||
+                            report.status == ReportStatuses.forReplacement
                         ? "Only the assigned personnel can update this report."
                         : "This report cannot be updated from its current status.",
                     style: const TextStyle(color: _muted),

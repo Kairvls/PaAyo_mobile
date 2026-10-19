@@ -7,6 +7,7 @@ import 'package:path/path.dart';
 import '../models/equipment.dart';
 import '../models/equipment_full_profile.dart';
 import '../models/maintenance_report.dart';
+import '../utils/report_status.dart';
 
 /// Thrown when a scanned QR code has no matching equipment (HTTP 404).
 class EquipmentNotFoundException implements Exception {
@@ -17,7 +18,7 @@ class EquipmentNotFoundException implements Exception {
 }
 
 class MaintenanceService {
-  static const String baseUrl = "http://192.168.1.19:8000/api";
+  static const String baseUrl = "http://192.168.1.25:8000/api";
 
   final Dio dio = Dio(
     BaseOptions(
@@ -299,19 +300,43 @@ class MaintenanceService {
   }
 
   /// GET /maintenance/reports
+  ///
+  /// [priority] is Critical / High / Medium / Low. The API still accepts
+  /// legacy `urgency` (Urgent / Non-Urgent); priority levels are refined
+  /// client-side from each report's severity.
   Future<List<MaintenanceReport>> listReports({
     String? status,
-    String? urgency,
+    String? priority,
+    @Deprecated("Use priority") String? urgency,
     String? search,
     bool archive = false,
     int limit = 50,
   }) async {
     await _attachToken();
+
+    final requestedPriority = (priority != null && priority.isNotEmpty)
+        ? priority
+        : null;
+    final legacyUrgency = (urgency != null && urgency.isNotEmpty)
+        ? urgency
+        : null;
+
+    // Approximate server bucket so Critical/High and Medium/Low pull the
+    // right urgency group, then refine by exact priority locally.
+    String? serverUrgency = legacyUrgency;
+    if (requestedPriority != null) {
+      serverUrgency =
+          (requestedPriority == "Critical" || requestedPriority == "High")
+              ? "Urgent"
+              : "Non-Urgent";
+    }
+
     final res = await dio.get(
       "$baseUrl/maintenance/reports",
       queryParameters: {
         if (status != null && status.isNotEmpty) "status": status,
-        if (urgency != null && urgency.isNotEmpty) "urgency": urgency,
+        if (serverUrgency != null && serverUrgency.isNotEmpty)
+          "urgency": serverUrgency,
         if (search != null && search.trim().isNotEmpty) "search": search.trim(),
         if (archive) "archive": 1,
         "limit": limit,
@@ -320,17 +345,23 @@ class MaintenanceService {
     final data = res.data;
 
     if (res.statusCode == 200 && data is Map && data["reports"] is List) {
-      final reports = (data["reports"] as List)
+      var reports = (data["reports"] as List)
           .whereType<Map>()
           .map((e) =>
               MaintenanceReport.fromJson(Map<String, dynamic>.from(e)))
           .toList();
 
+      if (requestedPriority != null) {
+        reports = reports
+            .where((r) => r.priority == requestedPriority)
+            .toList();
+      }
+
       reports.sort((a, b) {
-        final aUrgent = a.urgency == "Urgent" ? 0 : 1;
-        final bUrgent = b.urgency == "Urgent" ? 0 : 1;
-        final byUrgent = aUrgent.compareTo(bUrgent);
-        if (byUrgent != 0) return byUrgent;
+        final byPriority =
+            ReportPriorities.rank(b.priority)
+                .compareTo(ReportPriorities.rank(a.priority));
+        if (byPriority != 0) return byPriority;
 
         final aDate = a.updatedAt ??
             a.submittedAt ??

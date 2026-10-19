@@ -174,6 +174,8 @@ String sweetAlertTitleForStatus(String status, {bool partial = false}) {
       return "Submitted for replacement";
     case "Rejected":
       return "Report rejected";
+    case "Closed / Cancelled":
+      return "Report closed";
     default:
       return "Status updated";
   }

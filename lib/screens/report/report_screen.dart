@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
+import '../../utils/input_limits.dart';
 import '../qr/qr_scanner_screen.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -78,7 +79,7 @@ class _QuickCheckOutcome {
 }
 
 class _ReportScreenState extends State<ReportScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   /// Matches STI-PRISM mobile Maintenance Report modal tokens.
   static const _ink = Color(0xFF1A1A2E);
   static const _muted = Color(0xFF6B7280);
@@ -93,9 +94,19 @@ class _ReportScreenState extends State<ReportScreen>
   static const _radius = 16.0;
   static const _radiusSm = 12.0;
 
+  /// Matches web landing report modal: 15 min idle → 60s warning → close.
+  static const _idleDuration = Duration(minutes: 15);
+  static const _idleWarnDuration = Duration(seconds: 60);
+  static const _idleClosedMessage =
+      "No activity for 15 minutes. Your session was closed to protect this device. "
+      "Your equipment list was kept — verify again to continue.";
+
   Timer? _issueSearchTimer;
   Timer? _locationSearchTimer;
   Timer? _equipmentSearchTimer;
+  Timer? _idleTimer;
+  bool _idleWatching = false;
+  bool _idleWarningActive = false;
   final TextEditingController employeeIdController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
 
@@ -170,10 +181,19 @@ class _ReportScreenState extends State<ReportScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadRooms();
     _pinFocus.addListener(() {
       if (mounted) setState(() {});
     });
+    scrollController.addListener(_onUserActivity);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onUserActivity();
+    }
   }
 
   Future<void> _initTour() async {
@@ -214,7 +234,7 @@ class _ReportScreenState extends State<ReportScreen>
           targetKey: employeeKey,
           title: "You're verified",
           body:
-              "Your employee ID was confirmed with your PIN. Not you? Tap Switch.",
+              "Your employee ID was confirmed with your PIN. Close the form to sign out and verify again.",
         ),
         CoachStep(
           targetKey: assignedKey,
@@ -270,12 +290,15 @@ class _ReportScreenState extends State<ReportScreen>
     final map = room is Map ? Map<String, dynamic>.from(room) : <String, dynamic>{};
     final location = (map["location"]?.toString() ?? "").trim();
     final count = int.tryParse(map["equipment_count"]?.toString() ?? "") ?? 0;
-    if (location.isEmpty) return "Eq. $count";
+    if (location.isEmpty) return "📦 $count";
     // Avoid duplicating if API already appended a count.
-    if (RegExp(r'(Eq\.\s*\d+|\s-\s\d+\s*$)').hasMatch(location)) {
-      return location;
+    if (RegExp(r'(📦\s*\d+|Eq\.\s*\d+|\s-\s\d+\s*$)').hasMatch(location)) {
+      return location.replaceFirstMapped(
+        RegExp(r'\s*-\s*Eq\.\s*(\d+)\s*$'),
+        (m) => " • 📦 ${m[1]}",
+      );
     }
-    return "$location - Eq. $count";
+    return "$location • 📦 $count";
   }
 
   String formatEquipmentLabel(dynamic item) {
@@ -359,7 +382,7 @@ class _ReportScreenState extends State<ReportScreen>
     }
 
     add("Name", map["equipment_name"] ?? displayLabel);
-    add("Category", map["equipment_category_name"] ?? map["category"]);
+    add("Classification", map["equipment_category_name"] ?? map["category"]);
     add("Asset tag", map["equipment_asset_tag"]);
     add("Serial number", map["equipment_serial_number"]);
     add("Brand", map["equipment_brand_name"]);
@@ -609,11 +632,21 @@ class _ReportScreenState extends State<ReportScreen>
         systemNavigationBarColor: Colors.white,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      child: Scaffold(
+      child: PopScope(
+        canPop: !reporterVerified,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || !reporterVerified) return;
+          unawaited(_confirmCloseToPhase1());
+        },
+        child: Scaffold(
       backgroundColor: _page,
       body: !reporterVerified
           ? _buildGate(topInset)
-          : SingleChildScrollView(
+          : Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _onUserActivity(),
+              onPointerMove: (_) => _onUserActivity(),
+              child: SingleChildScrollView(
         controller: scrollController,
         padding: EdgeInsets.fromLTRB(20, topInset + 16, 20, 32),
         child: Column(
@@ -715,7 +748,7 @@ class _ReportScreenState extends State<ReportScreen>
                   ),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: () => Navigator.maybePop(context),
+                    onTap: () => unawaited(_confirmCloseToPhase1()),
                     child: const SizedBox(
                       width: 36,
                       height: 36,
@@ -1044,7 +1077,10 @@ class _ReportScreenState extends State<ReportScreen>
                 controller: descriptionController,
                 enabled: _canWriteDetails,
                 maxLines: 5,
-                maxLength: 2000,
+                maxLength: InputLimits.problemDetails,
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(InputLimits.problemDetails),
+                ],
                 buildCounter: (context,
                         {required currentLength,
                         required isFocused,
@@ -1120,7 +1156,7 @@ class _ReportScreenState extends State<ReportScreen>
             const SizedBox(height: 8),
             Center(
               child: TextButton(
-                onPressed: () => Navigator.maybePop(context),
+                onPressed: () => unawaited(_confirmCloseToPhase1()),
                 child: const Text(
                   "Cancel",
                   style: TextStyle(
@@ -1134,11 +1170,16 @@ class _ReportScreenState extends State<ReportScreen>
         ),
       ),
       ),
+      ),
+      ),
     );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopIdleWatch();
+    scrollController.removeListener(_onUserActivity);
     unawaited(api.logoutReporter());
     employeeIdController.dispose();
     pinController.dispose();
@@ -1151,6 +1192,194 @@ class _ReportScreenState extends State<ReportScreen>
     _locationSearchTimer?.cancel();
     _equipmentSearchTimer?.cancel();
     super.dispose();
+  }
+
+  void _startIdleWatch() {
+    _idleWatching = true;
+    _idleWarningActive = false;
+    _resetIdleTimer();
+  }
+
+  void _stopIdleWatch() {
+    _idleWatching = false;
+    _idleWarningActive = false;
+    _idleTimer?.cancel();
+    _idleTimer = null;
+  }
+
+  void _onUserActivity() {
+    if (!_idleWatching || _idleWarningActive || !reporterVerified) return;
+    _resetIdleTimer();
+  }
+
+  void _resetIdleTimer() {
+    _idleTimer?.cancel();
+    if (!_idleWatching || _idleWarningActive) return;
+    _idleTimer = Timer(_idleDuration, () {
+      unawaited(_runIdleWarningFlow());
+    });
+  }
+
+  Future<void> _runIdleWarningFlow() async {
+    if (!_idleWatching || _idleWarningActive || !mounted || !reporterVerified) {
+      return;
+    }
+
+    _idleWarningActive = true;
+    _idleTimer?.cancel();
+
+    Timer? countdown;
+    final stay = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: const Color(0xBF0B1220),
+      builder: (dialogContext) {
+        var secondsLeft = _idleWarnDuration.inSeconds;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            countdown ??= Timer.periodic(const Duration(seconds: 1), (timer) {
+              if (!dialogContext.mounted) {
+                timer.cancel();
+                return;
+              }
+              secondsLeft -= 1;
+              if (secondsLeft <= 0) {
+                timer.cancel();
+                Navigator.of(dialogContext).pop(false);
+                return;
+              }
+              setDialogState(() {});
+            });
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_radius),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "REPORT SECURITY",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Still there?",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "No activity detected for 15 minutes. This report form will close in "
+                      "$secondsLeft seconds to protect your session on this device.",
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: _muted,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              countdown?.cancel();
+                              Navigator.of(dialogContext).pop(false);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _muted,
+                              side: const BorderSide(color: _border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(_radiusSm),
+                              ),
+                              minimumSize: const Size.fromHeight(44),
+                            ),
+                            child: const Text(
+                              "Close now",
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              countdown?.cancel();
+                              Navigator.of(dialogContext).pop(true);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _blue,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(_radiusSm),
+                              ),
+                              minimumSize: const Size.fromHeight(44),
+                            ),
+                            child: const Text(
+                              "Yes",
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    countdown?.cancel();
+    _idleWarningActive = false;
+
+    if (!mounted) return;
+
+    // Keep reporting, or dismiss barrier → stay open (same as web).
+    if (stay == true || stay == null) {
+      if (_idleWatching && reporterVerified) {
+        _resetIdleTimer();
+      }
+      return;
+    }
+
+    await _forceIdleClose();
+  }
+
+  Future<void> _forceIdleClose() async {
+    _stopIdleWatch();
+    unawaited(api.logoutReporter());
+    if (!mounted) return;
+
+    // Close any open dialogs (idle warning, pickers, etc.) without leaving the page.
+    Navigator.of(context).popUntil((route) => route is! PopupRoute);
+
+    if (!mounted) return;
+    _returnToGate(
+      clearId: true,
+      message: _idleClosedMessage,
+      tone: _GateTone.warn,
+    );
   }
 
   Future<void> addEquipmentItem() async {
@@ -1353,6 +1582,7 @@ class _ReportScreenState extends State<ReportScreen>
         reporterName = reporter["reporter_full_name"]?.toString().trim() ?? "";
         assignedEquipment = [];
       });
+      _startIdleWatch();
       _loadAssignedEquipment(verifiedId);
       if (!_tourChecked) {
         _tourChecked = true;
@@ -1423,14 +1653,135 @@ class _ReportScreenState extends State<ReportScreen>
     });
   }
 
-  void _switchReporter() {
+  /// Ask before leaving the report form for PIN verify (phase 1).
+  Future<void> _confirmCloseToPhase1() async {
+    if (!reporterVerified || !mounted) return;
     FocusManager.instance.primaryFocus?.unfocus();
+
+    final leave = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: const Color(0x660F172A),
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_radius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFF7ED),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFEA580C),
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Leave this report?",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  selectedItems.isEmpty
+                      ? "You'll need to verify your employee ID again. Any equipment you've added won't be submitted & saved."
+                      : "You'll need to verify again. Your draft list of ${selectedItems.length} "
+                          "${selectedItems.length == 1 ? "item" : "items"} will be kept, but the employee ID will be cleared.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: _muted,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _muted,
+                          side: const BorderSide(color: _border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(_radiusSm),
+                          ),
+                          minimumSize: const Size.fromHeight(46),
+                        ),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _blue,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(_radiusSm),
+                          ),
+                          minimumSize: const Size.fromHeight(46),
+                        ),
+                        child: const Text(
+                          "Leave",
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || leave != true) return;
+    _closeToPhase1();
+  }
+
+  /// Leave the report form and return to PIN verify (phase 1), not home.
+  /// Clears the employee ID so it is not kept for the next person.
+  void _closeToPhase1() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _stopIdleWatch();
     unawaited(api.logoutReporter());
     _returnToGate(clearId: true);
   }
 
   /// Back to step 1. The draft list is kept so a re-verified reporter can still send it.
-  void _returnToGate({bool clearId = false, String? message}) {
+  void _returnToGate({
+    bool clearId = false,
+    String? message,
+    _GateTone tone = _GateTone.error,
+  }) {
+    _stopIdleWatch();
     api.clearReporterToken();
     if (clearId) employeeIdController.clear();
     pinController.clear();
@@ -1441,7 +1792,7 @@ class _ReportScreenState extends State<ReportScreen>
       showForgotPin = false;
       showPin = false;
       gateMessage = message;
-      gateMessageTone = _GateTone.error;
+      gateMessageTone = tone;
     });
   }
 
@@ -1542,13 +1893,13 @@ class _ReportScreenState extends State<ReportScreen>
     );
   }
 
-  /// Verified reporter in one row: name, employee ID, and a way to switch.
+  /// Verified reporter in one row: name and employee ID.
   Widget _reporterCard() {
     final employeeId = employeeIdController.text.trim();
     final title = reporterName.isNotEmpty ? reporterName : employeeId;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: _blueSoft,
         borderRadius: BorderRadius.circular(_radiusSm),
@@ -1599,7 +1950,6 @@ class _ReportScreenState extends State<ReportScreen>
               ],
             ),
           ),
-          _gateLink("Switch", _switchReporter),
         ],
       ),
     );
@@ -2579,6 +2929,11 @@ class _ReportScreenState extends State<ReportScreen>
                       "${reason.isEmpty ? "" : " $reason"}";
                 }
 
+                successMessage +=
+                    "\n\nA confirmation was emailed to the address on file for this employee ID. "
+                    "If that wasn't you, tell Maintenance right away so they can reset your PIN. "
+                    "You'll also get an email when the status changes.";
+
                 setDialogState(() => phase = "success");
               } catch (e) {
                 errorMessage = "Failed to submit report.";
@@ -2973,6 +3328,7 @@ class _ReportScreenState extends State<ReportScreen>
   }
 
   void resetForm() {
+    _stopIdleWatch();
     employeeIdController.clear();
     pinController.clear();
     descriptionController.clear();
@@ -3031,7 +3387,7 @@ class _ReportScreenState extends State<ReportScreen>
     final trimmed = name.trim();
     switch (trimmed.toLowerCase()) {
       case "":
-        return "Other / uncategorized";
+        return "Other / unclassified";
       case "ave":
         return "Audio-Visual Equipment";
       case "ce":
@@ -3229,6 +3585,19 @@ class _ReportScreenState extends State<ReportScreen>
                                   controller: searchController,
                                   focusNode: searchFocus,
                                   textInputAction: TextInputAction.search,
+                                  maxLength: InputLimits.search,
+                                  inputFormatters: [
+                                    LengthLimitingTextInputFormatter(
+                                      InputLimits.search,
+                                    ),
+                                  ],
+                                  buildCounter: (
+                                    context, {
+                                    required currentLength,
+                                    required isFocused,
+                                    maxLength,
+                                  }) =>
+                                      null,
                                   onChanged: (value) {
                                     setModalState(() => search = value);
                                   },
@@ -3279,7 +3648,7 @@ class _ReportScreenState extends State<ReportScreen>
                             children: [
                               _categoryChip(
                                 label: "All",
-                                tooltip: "All categories",
+                                tooltip: "All classifications",
                                 selected: categoryFilter.isEmpty,
                                 onTap: () => setModalState(
                                   () => categoryFilter = "",
@@ -3310,7 +3679,7 @@ class _ReportScreenState extends State<ReportScreen>
                                     items.isEmpty && enableLongPressDetails
                                         ? "All equipment for this location is already added."
                                         : categoryFilter.isNotEmpty
-                                            ? "No equipment in this category."
+                                            ? "No equipment in this classification."
                                             : "No matches. Try another search.",
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
@@ -3669,7 +4038,7 @@ class _ReportScreenState extends State<ReportScreen>
 
   static final _employeeIdFormatters = <TextInputFormatter>[
     FilteringTextInputFormatter.deny(RegExp(r'\s')),
-    LengthLimitingTextInputFormatter(20),
+    LengthLimitingTextInputFormatter(InputLimits.employeeId),
     const _UpperCaseTextFormatter(),
   ];
 
@@ -3792,9 +4161,10 @@ class _ReportScreenState extends State<ReportScreen>
           readOnly: isVerifyingPin,
           autocorrect: false,
           enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           textCapitalization: TextCapitalization.characters,
           textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.username],
+          autofillHints: const <String>[],
           inputFormatters: _employeeIdFormatters,
           style: const TextStyle(
             fontSize: 15,
@@ -3912,12 +4282,13 @@ class _ReportScreenState extends State<ReportScreen>
                         enableInteractiveSelection: false,
                         autocorrect: false,
                         enableSuggestions: false,
+                        enableIMEPersonalizedLearning: false,
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.password],
+                        autofillHints: const <String>[],
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(6),
+                          LengthLimitingTextInputFormatter(InputLimits.pin),
                         ],
                         decoration: const InputDecoration(
                           border: InputBorder.none,
@@ -4000,8 +4371,10 @@ class _ReportScreenState extends State<ReportScreen>
           readOnly: isSendingForgot,
           autocorrect: false,
           enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           textCapitalization: TextCapitalization.characters,
           textInputAction: TextInputAction.send,
+          autofillHints: const <String>[],
           inputFormatters: _employeeIdFormatters,
           style: const TextStyle(
             fontSize: 15,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
+import '../../utils/equipment_status.dart';
 
 class EditEquipmentScreen extends StatefulWidget {
   final Equipment equipment;
@@ -20,19 +21,8 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
   static const _blue = Color(0xFF0025CC);
   static const _border = Color(0xFFE5E7EB);
 
-  static const _conditions = [
-    "Good",
-    "Damaged",
-    "Under Maintenance",
-    "Disposed",
-  ];
-  static const _inventoryStatuses = [
-    "Active",
-    "Under Maintenance",
-    "Borrowed",
-    "For Replacement",
-    "Disposed",
-  ];
+  static const _conditions = EquipmentConditions.all;
+  static const _inventoryStatuses = EquipmentInventoryStatuses.all;
 
   final MaintenanceService _service = MaintenanceService();
 
@@ -61,8 +51,12 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
     _model = TextEditingController(text: _clean(e.model));
     _serial = TextEditingController(text: _clean(e.serial));
     _location = TextEditingController();
-    _condition = _initial(e.condition, _conditions, "Good");
-    _inventoryStatus = _initial(e.status, _inventoryStatuses, "Active");
+    _condition = _initial(e.condition, _conditions, EquipmentConditions.good);
+    _inventoryStatus = _initial(
+      e.status,
+      _inventoryStatuses,
+      EquipmentInventoryStatuses.active,
+    );
   }
 
   @override
@@ -220,7 +214,7 @@ class _EditEquipmentScreenState extends State<EditEquipmentScreen> {
                       (v) => setState(() => _condition = v),
                     ),
                     const SizedBox(height: 22),
-                    _sectionLabel("Inventory Status"),
+                    _sectionLabel("Status"),
                     const SizedBox(height: 12),
                     _pillChoices(
                       _inventoryStatuses,

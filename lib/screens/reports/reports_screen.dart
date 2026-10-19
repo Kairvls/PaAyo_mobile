@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/maintenance_report.dart';
 import '../../services/maintenance_service.dart';
+import '../../utils/input_limits.dart';
+import '../../utils/report_status.dart';
 import 'report_detail_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -25,25 +28,11 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   bool _archiveMode = false;
 
-  /// null = all, "Urgent", "Non-Urgent"
-  String? _urgencyFilter;
+  /// null = all priorities; otherwise Critical / High / Medium / Low
+  String? _priorityFilter;
 
-  static const _activeFilters = [
-    ("Pending", "Pending"),
-    ("Processing", "Processing"),
-    ("Resolved", "Resolved"),
-    ("For Replacement", "For Replacement"),
-    ("Rejected", "Rejected"),
-  ];
-
-  static const _archiveFilters = [
-    ("Resolved", "Resolved"),
-    ("For Replacement", "For Replacement"),
-    ("Rejected", "Rejected"),
-  ];
-
-  List<(String, String)> get _filters =>
-      _archiveMode ? _archiveFilters : _activeFilters;
+  List<String> get _filters =>
+      _archiveMode ? ReportStatuses.archive : ReportStatuses.active;
 
   @override
   void initState() {
@@ -65,7 +54,9 @@ class _ReportsScreenState extends State<ReportsScreen>
     oldTabs.removeListener(_onTabChanged);
 
     final newTabs = TabController(
-      length: archive ? _archiveFilters.length : _activeFilters.length,
+      length: archive
+          ? ReportStatuses.archive.length
+          : ReportStatuses.active.length,
       vsync: this,
     );
     newTabs.addListener(_onTabChanged);
@@ -87,38 +78,21 @@ class _ReportsScreenState extends State<ReportsScreen>
     super.dispose();
   }
 
-  void _setUrgencyFilter(String? urgency) {
-    if (_urgencyFilter == urgency) return;
-    setState(() => _urgencyFilter = urgency);
+  void _setPriorityFilter(String? priority) {
+    if (_priorityFilter == priority) return;
+    setState(() => _priorityFilter = priority);
     _reload();
   }
 
   void _reload() {
     setState(() {
       _future = _service.listReports(
-        status: _filters[_tabs.index].$1,
-        urgency: _urgencyFilter,
+        status: _filters[_tabs.index],
+        priority: _priorityFilter,
         search: _search.text.trim().isEmpty ? null : _search.text.trim(),
         archive: _archiveMode,
       );
     });
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case "Pending":
-        return const Color(0xFFF59E0B);
-      case "Processing":
-        return const Color(0xFF7C3AED);
-      case "Resolved":
-        return const Color(0xFF16A34A);
-      case "For Replacement":
-        return const Color(0xFFEA580C);
-      case "Rejected":
-        return const Color(0xFFDC2626);
-      default:
-        return _muted;
-    }
   }
 
   Future<void> _openReport(MaintenanceReport report) async {
@@ -162,7 +136,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           labelColor: _ink,
           unselectedLabelColor: _muted,
           indicatorColor: const Color(0xFF2563EB),
-          tabs: _filters.map((f) => Tab(text: f.$2)).toList(),
+          tabs: _filters.map((status) => Tab(text: status)).toList(),
         ),
       ),
       body: Column(
@@ -171,6 +145,17 @@ class _ReportsScreenState extends State<ReportsScreen>
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _search,
+              maxLength: InputLimits.search,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(InputLimits.search),
+              ],
+              buildCounter: (
+                context, {
+                required currentLength,
+                required isFocused,
+                maxLength,
+              }) =>
+                  null,
               decoration: InputDecoration(
                 hintText: "Search ticket, room, equipment…",
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -184,29 +169,29 @@ class _ReportsScreenState extends State<ReportsScreen>
               onSubmitted: (_) => _reload(),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               children: [
-                _UrgencyChip(
-                  label: "All",
-                  selected: _urgencyFilter == null,
-                  onTap: () => _setUrgencyFilter(null),
+                _PriorityChip(
+                  label: "All Priorities",
+                  selected: _priorityFilter == null,
+                  onTap: () => _setPriorityFilter(null),
                 ),
                 const SizedBox(width: 8),
-                _UrgencyChip(
-                  label: "Urgent",
-                  selected: _urgencyFilter == "Urgent",
-                  accent: const Color(0xFFDC2626),
-                  onTap: () => _setUrgencyFilter("Urgent"),
-                ),
-                const SizedBox(width: 8),
-                _UrgencyChip(
-                  label: "Non-Urgent",
-                  selected: _urgencyFilter == "Non-Urgent",
-                  accent: const Color(0xFF2563EB),
-                  onTap: () => _setUrgencyFilter("Non-Urgent"),
-                ),
+                ...ReportPriorities.all.map((level) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _PriorityChip(
+                      label: level,
+                      selected: _priorityFilter == level,
+                      accent: ReportPriorities.color(level),
+                      onTap: () => _setPriorityFilter(level),
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -221,17 +206,15 @@ class _ReportsScreenState extends State<ReportsScreen>
                 final reports = snapshot.data ?? [];
 
                 if (reports.isEmpty) {
-                  final statusLabel = _filters[_tabs.index].$2.toLowerCase();
-                  final urgencyLabel = switch (_urgencyFilter) {
-                    "Urgent" => "urgent ",
-                    "Non-Urgent" => "non-urgent ",
-                    _ => "",
-                  };
+                  final statusLabel = _filters[_tabs.index].toLowerCase();
+                  final priorityLabel = _priorityFilter == null
+                      ? ""
+                      : "${_priorityFilter!.toLowerCase()} ";
                   return Center(
                     child: Text(
                       _archiveMode
-                          ? "No archived $urgencyLabel$statusLabel reports."
-                          : "No $urgencyLabel$statusLabel reports.",
+                          ? "No archived $priorityLabel$statusLabel reports."
+                          : "No $priorityLabel$statusLabel reports.",
                       style: const TextStyle(color: _muted),
                     ),
                   );
@@ -245,7 +228,8 @@ class _ReportsScreenState extends State<ReportsScreen>
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final report = reports[index];
-                      final urgent = report.urgency == "Urgent";
+                      final priorityColor =
+                          ReportPriorities.color(report.priority);
 
                       return Material(
                         color: Colors.white,
@@ -269,26 +253,27 @@ class _ReportsScreenState extends State<ReportsScreen>
                                         ),
                                       ),
                                     ),
-                                    if (urgent)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: ReportPriorities.softBackground(
+                                          report.priority,
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFEF2F2),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: const Text(
-                                          "Urgent",
-                                          style: TextStyle(
-                                            color: Color(0xFFDC2626),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        report.priority,
+                                        style: TextStyle(
+                                          color: priorityColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
@@ -313,7 +298,9 @@ class _ReportsScreenState extends State<ReportsScreen>
                                       width: 8,
                                       height: 8,
                                       decoration: BoxDecoration(
-                                        color: _statusColor(report.status),
+                                        color: ReportStatuses.color(
+                                          report.status,
+                                        ),
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -321,7 +308,9 @@ class _ReportsScreenState extends State<ReportsScreen>
                                     Text(
                                       report.status,
                                       style: TextStyle(
-                                        color: _statusColor(report.status),
+                                        color: ReportStatuses.color(
+                                          report.status,
+                                        ),
                                         fontWeight: FontWeight.w700,
                                         fontSize: 12,
                                       ),
@@ -374,13 +363,13 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 }
 
-class _UrgencyChip extends StatelessWidget {
+class _PriorityChip extends StatelessWidget {
   final String label;
   final bool selected;
   final Color? accent;
   final VoidCallback onTap;
 
-  const _UrgencyChip({
+  const _PriorityChip({
     required this.label,
     required this.selected,
     required this.onTap,
