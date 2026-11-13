@@ -69,6 +69,22 @@ class _ReportEquipmentItem {
       checks.where((check) => check["answer"] == "not_fixed").length;
 }
 
+/// Groups held computer-set members for the reporter form tree.
+class _HeldComputerSet {
+  final int id;
+  final String tag;
+  final String name;
+  String roomName;
+  final List<Map<String, dynamic>> items = [];
+
+  _HeldComputerSet({
+    required this.id,
+    required this.tag,
+    required this.name,
+    required this.roomName,
+  });
+}
+
 enum _QuickCheckStatus { done, fixed, cancelled }
 
 class _QuickCheckOutcome {
@@ -132,8 +148,10 @@ class _ReportScreenState extends State<ReportScreen>
   _GateTone forgotMessageTone = _GateTone.info;
   bool _tourChecked = false;
   bool _addingItem = false;
-  bool showAssigned = false;
+  bool showAssigned = true;
   bool showItems = false;
+  /// Computer-set ids the user has collapsed in "Your held equipment".
+  final Set<int> collapsedHeldSetIds = {};
 
   List<dynamic> suggestedIssues = [];
   int? selectedSuggestedIssueId;
@@ -150,7 +168,7 @@ class _ReportScreenState extends State<ReportScreen>
 
   final List<_ReportEquipmentItem> selectedItems = [];
 
-  /// Equipment issued to the verified reporter (property assignment).
+  /// Equipment held by the verified reporter (property assignment).
   List<Map<String, dynamic>> assignedEquipment = [];
 
   String? locationError;
@@ -238,9 +256,9 @@ class _ReportScreenState extends State<ReportScreen>
         ),
         CoachStep(
           targetKey: assignedKey,
-          title: "Your assigned equipment",
+          title: "Your held equipment",
           body:
-              "Equipment issued to you. Open the list and tap one to fill in its location and equipment.",
+              "Units assigned to you, including computer-set components. Tap a component or item to fill location and equipment. Items already queued for replacement stay visible but can't be reported again.",
         ),
         CoachStep(
           targetKey: scanKey,
@@ -303,7 +321,11 @@ class _ReportScreenState extends State<ReportScreen>
 
   String formatEquipmentLabel(dynamic item) {
     final map = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
-    final name = (map["equipment_name"]?.toString() ?? "Equipment").trim();
+    final baseName = (map["equipment_name"]?.toString() ?? "Equipment").trim();
+    final role = (map["computer_set_member_role"]?.toString() ?? "").trim();
+    final name = role.isEmpty
+        ? baseName
+        : "$baseName · ${role.replaceAll("_", " ")}";
     final parts = <String>[];
 
     final assetTag = (map["equipment_asset_tag"]?.toString() ?? "").trim();
@@ -770,7 +792,7 @@ class _ReportScreenState extends State<ReportScreen>
 
             // ── Reporter ──
             KeyedSubtree(key: employeeKey, child: _reporterCard()),
-            if (assignedEquipment.isNotEmpty) ...[
+            if (_heldVisibleEquipment.isNotEmpty) ...[
               const SizedBox(height: 8),
               KeyedSubtree(key: assignedKey, child: _assignedEquipmentBox()),
             ],
@@ -800,6 +822,10 @@ class _ReportScreenState extends State<ReportScreen>
               ],
             ),
             const SizedBox(height: 10),
+            if (_heldVisibleEquipment.any(_heldCanReport)) ...[
+              _heldQuickPickStrip(),
+              const SizedBox(height: 10),
+            ],
             KeyedSubtree(
               key: locationKey,
               child: Container(
@@ -1581,6 +1607,7 @@ class _ReportScreenState extends State<ReportScreen>
         reporterVerified = true;
         reporterName = reporter["reporter_full_name"]?.toString().trim() ?? "";
         assignedEquipment = [];
+        collapsedHeldSetIds.clear();
       });
       _startIdleWatch();
       _loadAssignedEquipment(verifiedId);
@@ -1789,6 +1816,7 @@ class _ReportScreenState extends State<ReportScreen>
       reporterVerified = false;
       reporterName = "";
       assignedEquipment = [];
+      collapsedHeldSetIds.clear();
       showForgotPin = false;
       showPin = false;
       gateMessage = message;
@@ -1797,17 +1825,126 @@ class _ReportScreenState extends State<ReportScreen>
   }
 
   Future<void> _loadAssignedEquipment(String employeeId) async {
-    final items = await api.getAssignedEquipment(employeeId);
+    final result = await api.getAssignedEquipment(employeeId);
     if (!mounted ||
         !reporterVerified ||
         employeeIdController.text.trim() != employeeId) {
       return;
     }
-    setState(() => assignedEquipment = items);
+    setState(() {
+      assignedEquipment = result.equipment;
+      collapsedHeldSetIds.clear();
+      showAssigned = result.equipment.isNotEmpty;
+    });
+    await _applyDefaultReporterRoom(
+      result.defaultRoomId,
+      result.defaultRoomName,
+    );
   }
+
+  /// Prefills location from the reporter's most common held-equipment room.
+  Future<void> _applyDefaultReporterRoom(
+    int? roomId,
+    String? roomName, {
+    bool force = true,
+  }) async {
+    if (roomId == null) return;
+    if (!force && selectedRoomId != null) return;
+
+    final existing = rooms.cast<dynamic>().firstWhere(
+          (r) => r is Map && r["room_id"]?.toString() == roomId.toString(),
+          orElse: () => null,
+        );
+
+    if (existing == null && roomName != null && roomName.isNotEmpty) {
+      setState(() {
+        rooms = [
+          ...rooms,
+          {
+            "room_id": roomId,
+            "room_name": roomName,
+            "location": roomName,
+            "equipment_count": 0,
+          },
+        ];
+      });
+    }
+
+    if (selectedRoomId == roomId) return;
+
+    final room = rooms.cast<dynamic>().firstWhere(
+          (r) => r is Map && r["room_id"]?.toString() == roomId.toString(),
+          orElse: () => null,
+        );
+
+    setState(() {
+      selectedRoomId = roomId;
+      selectedLocation = room != null
+          ? formatRoomLocationLabel(room)
+          : (roomName ?? "Location #$roomId");
+      selectedEquipmentLabel = null;
+      selectedEquipmentId = null;
+      selectedEquipmentDetails = null;
+      selectedSuggestedIssueId = null;
+      selectedSuggestedIssueName = null;
+      suggestedIssues.clear();
+      locationError = null;
+      equipmentError = null;
+    });
+    await loadEquipment(roomId);
+  }
+
+  bool _heldCanReport(Map<String, dynamic> item) {
+    if (item.containsKey("can_report")) {
+      return item["can_report"] == true || item["can_report"] == 1;
+    }
+    return (item["room_id"]?.toString() ?? "").trim().isNotEmpty;
+  }
+
+  String _heldItemLabel(Map<String, dynamic> item) {
+    final role =
+        (item["computer_set_member_role"]?.toString() ?? "").trim();
+    final name =
+        (item["equipment_name"]?.toString() ?? "Equipment").trim();
+    if (role.isEmpty) return name;
+    return "$name · ${role.replaceAll("_", " ")}";
+  }
+
+  String _heldItemMeta(Map<String, dynamic> item) {
+    final tag = (item["equipment_asset_tag"]?.toString() ?? "").trim();
+    final room = (item["room_name"]?.toString() ?? "").trim();
+    final block = !_heldCanReport(item)
+        ? (item["report_block_reason"]?.toString().trim().isNotEmpty == true
+            ? item["report_block_reason"].toString().trim()
+            : "Not reportable")
+        : null;
+    return [
+      if (tag.isNotEmpty) tag,
+      if (room.isNotEmpty) room,
+      if (block != null) block,
+    ].join(" · ");
+  }
+
+  List<Map<String, dynamic>> get _heldVisibleEquipment => assignedEquipment
+      .where((item) => (item["room_id"]?.toString() ?? "").trim().isNotEmpty)
+      .toList();
 
   Future<void> pickAssignedEquipment(Map<String, dynamic> item) async {
     FocusManager.instance.primaryFocus?.unfocus();
+    if (!_heldCanReport(item)) {
+      final reason = item["report_block_reason"]?.toString().trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            (reason == null || reason.isEmpty)
+                ? "That held item cannot be reported right now."
+                : reason,
+          ),
+        ),
+      );
+      return;
+    }
     final id = _equipmentIdOf(item);
     if (id != null && _addedEquipmentIds.contains(id)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1825,7 +1962,7 @@ class _ReportScreenState extends State<ReportScreen>
         behavior: SnackBarBehavior.floating,
         content: Text(
           error ??
-              "${item["equipment_name"] ?? "Equipment"} selected. "
+              "${_heldItemLabel(item)} selected. "
                   "Choose an issue or describe the problem, then tap Add.",
         ),
       ),
@@ -1955,39 +2092,73 @@ class _ReportScreenState extends State<ReportScreen>
     );
   }
 
-  /// Collapsed to one row so it doesn't push the form down.
+  /// Held equipment card — computer sets expand into components (web parity).
   Widget _assignedEquipmentBox() {
-    final added = _addedEquipmentIds;
+    final visible = _heldVisibleEquipment;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_radiusSm),
-        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x402947F0)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFEEF2FF),
+            Color(0xFFF3F6FF),
+            Colors.white,
+          ],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            borderRadius: BorderRadius.circular(_radiusSm),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             onTap: () => setState(() => showAssigned = !showAssigned),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.inventory_2_outlined,
-                    size: 18,
-                    color: _blue,
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _blue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.work_outline_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      "Your assigned equipment (${assignedEquipment.length})",
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Your held equipment",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          showAssigned
+                              ? "Tap a component or item to report it. Location fills from where that unit is — change it below if needed."
+                              : "${visible.length} unit${visible.length == 1 ? "" : "s"} · tap to open",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            height: 1.35,
+                            fontWeight: FontWeight.w500,
+                            color: _muted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   AnimatedRotation(
@@ -2008,23 +2179,388 @@ class _ReportScreenState extends State<ReportScreen>
             child: !showAssigned
                 ? const SizedBox(width: double.infinity)
                 : Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: _heldEquipmentList(visible),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heldEquipmentList(List<Map<String, dynamic>> visible) {
+    final sets = <int, _HeldComputerSet>{};
+    final loose = <Map<String, dynamic>>[];
+
+    for (final item in visible) {
+      final setId = int.tryParse(item["computer_set_id"]?.toString() ?? "") ?? 0;
+      if (setId > 0) {
+        final bucket = sets.putIfAbsent(
+          setId,
+          () => _HeldComputerSet(
+            id: setId,
+            tag: (item["computer_set_tag"]?.toString() ?? "").trim(),
+            name: (item["computer_set_name"]?.toString() ?? "").trim(),
+            roomName: (item["computer_set_room_name"]?.toString() ??
+                    item["room_name"]?.toString() ??
+                    "")
+                .trim(),
+          ),
+        );
+        if (bucket.roomName.isEmpty) {
+          final room = (item["room_name"]?.toString() ?? "").trim();
+          if (room.isNotEmpty) bucket.roomName = room;
+        }
+        bucket.items.add(item);
+      } else {
+        loose.add(item);
+      }
+    }
+
+    return Column(
+      children: [
+        for (final set in sets.values) ...[
+          _heldComputerSetCard(set),
+          const SizedBox(height: 8),
+        ],
+        for (var i = 0; i < loose.length; i++) ...[
+          _heldEquipmentRow(loose[i], tree: false),
+          if (i < loose.length - 1) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _heldComputerSetCard(_HeldComputerSet set) {
+    final open = !collapsedHeldSetIds.contains(set.id);
+    final label = set.name.isNotEmpty ? set.name : "Computer set";
+    final title = set.tag.isNotEmpty ? "$label · ${set.tag}" : label;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xCCE2E8F0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() {
+              if (open) {
+                collapsedHeldSetIds.add(set.id);
+              } else {
+                collapsedHeldSetIds.remove(set.id);
+              }
+            }),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  AnimatedRotation(
+                    turns: open ? 0 : -0.25,
+                    duration: const Duration(milliseconds: 160),
+                    child: const Icon(
+                      Icons.expand_more_rounded,
+                      size: 18,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Tap one to report it.",
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: _placeholder,
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _ink,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        _assignedEquipmentChips(added),
+                        const SizedBox(height: 2),
+                        Text(
+                          set.roomName.isNotEmpty
+                              ? "Set location · ${set.roomName}"
+                              : "Open to pick a component",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      "${set.items.length}",
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (open) ...[
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: Column(
+                children: [
+                  for (var i = 0; i < set.items.length; i++)
+                    _heldEquipmentRow(
+                      set.items[i],
+                      tree: true,
+                      isLast: i == set.items.length - 1,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _heldEquipmentRow(
+    Map<String, dynamic> item, {
+    required bool tree,
+    bool isLast = true,
+  }) {
+    final canReport = _heldCanReport(item);
+    final id = _equipmentIdOf(item);
+    final isAdded = id != null && _addedEquipmentIds.contains(id);
+    final isSelected = id != null && id == selectedEquipmentId;
+    final enabled = canReport && !isAdded;
+    final meta = _heldItemMeta(item);
+
+    final body = Padding(
+      padding: EdgeInsets.fromLTRB(tree ? 4 : 12, 8, tree ? 4 : 12, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (tree) ...[
+            SizedBox(
+              width: 16,
+              child: Column(
+                children: [
+                  Container(width: 1, height: 8, color: const Color(0xFFCBD5E1)),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(color: _blue, width: 2),
+                    ),
+                  ),
+                  if (!isLast)
+                    Container(
+                      width: 1,
+                      height: 28,
+                      color: const Color(0xFFE2E8F0),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _heldItemLabel(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: enabled ? _ink : _placeholder,
+                  ),
+                ),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    meta,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: canReport
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFFB45309),
+                    ),
+                  ),
+                ],
+                if (isAdded) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Already in your report",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF22C55E),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (tree) {
+      return Material(
+        color: isSelected ? const Color(0x142947F0) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: enabled ? () => pickAssignedEquipment(item) : null,
+          child: Opacity(opacity: canReport ? 1 : 0.65, child: body),
+        ),
+      );
+    }
+
+    return Material(
+      color: isSelected ? const Color(0xFFF8FAFF) : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled ? () => pickAssignedEquipment(item) : null,
+        child: Opacity(
+          opacity: canReport ? 1 : 0.65,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? const Color(0x662947F0)
+                    : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: body,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Compact chips under Scan QR — same quick-pick strip as the web form.
+  Widget _heldQuickPickStrip() {
+    final quick = _heldVisibleEquipment
+        .where(_heldCanReport)
+        .take(6)
+        .toList();
+    if (quick.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x332947F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  "QUICK PICK FROM HELD",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: _blue,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() => showAssigned = true);
+                  final ctx = assignedKey.currentContext;
+                  if (ctx != null) {
+                    Scrollable.ensureVisible(
+                      ctx,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOut,
+                      alignment: 0.1,
+                    );
+                  }
+                },
+                child: const Text(
+                  "View all",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _blue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: quick.map((item) {
+              final id = _equipmentIdOf(item);
+              final isAdded = id != null && _addedEquipmentIds.contains(id);
+              final isSelected = id != null && id == selectedEquipmentId;
+              return Material(
+                color: isSelected ? _amber : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide(
+                    color: isSelected
+                        ? Colors.transparent
+                        : const Color(0x332947F0),
+                  ),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: isAdded ? null : () => pickAssignedEquipment(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      _heldItemLabel(item),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isAdded ? _placeholder : _ink,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -2334,78 +2870,6 @@ class _ReportScreenState extends State<ReportScreen>
       );
   }
 
-  Widget _assignedEquipmentChips(Set<int> added) {
-    return Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: assignedEquipment.map((item) {
-              final id = _equipmentIdOf(item);
-              final isAdded = id != null && added.contains(id);
-              final isSelected = id != null && id == selectedEquipmentId;
-              final name =
-                  (item["equipment_name"]?.toString() ?? "Equipment").trim();
-              final room = (item["room_name"]?.toString() ?? "").trim();
-              return Material(
-                color: isSelected ? _amber : Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  side: BorderSide(
-                    color: isSelected ? Colors.transparent : _border,
-                  ),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: isAdded ? null : () => pickAssignedEquipment(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isAdded) ...[
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            size: 14,
-                            color: Color(0xFF22C55E),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        Flexible(
-                          child: Text(
-                            name,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isAdded ? _placeholder : _ink,
-                            ),
-                          ),
-                        ),
-                        if (room.isNotEmpty) ...[
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              room,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: _placeholder,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          );
-  }
-
   Widget _scanQrButton() {
     final enabled = reporterVerified;
     return Material(
@@ -2543,20 +3007,48 @@ class _ReportScreenState extends State<ReportScreen>
     }
 
     final roomChanged = roomId != selectedRoomId;
-    final room = rooms.cast<dynamic>().firstWhere(
+    var room = rooms.cast<dynamic>().firstWhere(
           (r) => r is Map && r["room_id"]?.toString() == roomId.toString(),
           orElse: () => null,
         );
+
+    // Held units may live in a room not yet in the picker list.
+    if (room == null) {
+      final roomName = (item["room_name"]?.toString() ??
+              item["location"]?.toString() ??
+              "")
+          .trim();
+      if (roomName.isNotEmpty) {
+        room = {
+          "room_id": roomId,
+          "room_name": roomName,
+          "location": item["location"]?.toString() ?? roomName,
+          "equipment_count": 0,
+        };
+        setState(() => rooms = [...rooms, room]);
+      }
+    }
+
     final roomEquipment = await api.getEquipment(roomId);
     if (!mounted) return null;
+
+    // Person-held units are often omitted from the shared room list — inject.
+    final list = List<dynamic>.from(
+      roomEquipment.isNotEmpty ? roomEquipment : const [],
+    );
+    if (!list.any((e) => _equipmentIdOf(e) == id)) {
+      list.insert(0, item);
+    }
 
     setState(() {
       if (roomChanged) descriptionController.clear();
       selectedRoomId = roomId;
       selectedLocation = room != null
           ? formatRoomLocationLabel(room)
-          : (item["location"]?.toString() ?? "");
-      equipment = roomEquipment.isNotEmpty ? roomEquipment : [item];
+          : (item["location"]?.toString() ??
+              item["room_name"]?.toString() ??
+              "");
+      equipment = list;
       selectedEquipmentId = id;
       selectedEquipmentLabel = formatEquipmentLabel(item);
       selectedEquipmentDetails = _detailsFromEquipment(item);
@@ -3341,6 +3833,7 @@ class _ReportScreenState extends State<ReportScreen>
       showPin = false;
       gateMessage = null;
       assignedEquipment = [];
+      collapsedHeldSetIds.clear();
       selectedRoomId = null;
       selectedLocation = null;
       selectedEquipmentLabel = null;

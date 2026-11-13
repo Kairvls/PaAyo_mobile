@@ -190,10 +190,23 @@ class ApiService {
     }
   }
 
-  /// Reportable equipment issued to this reporter through property assignment.
-  Future<List<Map<String, dynamic>>> getAssignedEquipment(
+  /// Equipment held by this reporter (property assignment), matching the web
+  /// reporter form: units + computer-set membership, can_report flags, and a
+  /// preferred default room.
+  Future<
+      ({
+        List<Map<String, dynamic>> equipment,
+        int? defaultRoomId,
+        String? defaultRoomName,
+      })> getAssignedEquipment(
     String employeeId,
   ) async {
+    const empty = (
+      equipment: <Map<String, dynamic>>[],
+      defaultRoomId: null,
+      defaultRoomName: null,
+    );
+
     try {
       final response = await dio.get(
         "$baseUrl/reporter/${Uri.encodeComponent(employeeId.trim())}/assigned-equipment",
@@ -202,15 +215,41 @@ class ApiService {
         ),
       );
       final data = response.data;
-      if (response.statusCode == 200 && data is List) {
-        return data
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
+      if (response.statusCode != 200) return empty;
+
+      // New shape: { equipment, default_room_id, default_room_name }
+      if (data is Map) {
+        final raw = data["equipment"];
+        final items = raw is List
+            ? raw
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+            : <Map<String, dynamic>>[];
+        return (
+          equipment: items,
+          defaultRoomId: int.tryParse(data["default_room_id"]?.toString() ?? ""),
+          defaultRoomName: () {
+            final name = data["default_room_name"]?.toString().trim();
+            return (name == null || name.isEmpty) ? null : name;
+          }(),
+        );
+      }
+
+      // Legacy flat list
+      if (data is List) {
+        return (
+          equipment: data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(),
+          defaultRoomId: null,
+          defaultRoomName: null,
+        );
       }
     } catch (_) {}
 
-    return [];
+    return empty;
   }
 
   Future<List<dynamic>> getSuggestedIssues(
