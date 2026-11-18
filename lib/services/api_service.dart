@@ -2,9 +2,10 @@ import 'package:dio/dio.dart';
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../core/constants/api.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.1.25:8000/api";
+  static const String baseUrl = Api.baseUrl;
 
   final Dio dio = Dio(
     BaseOptions(
@@ -177,7 +178,10 @@ class ApiService {
     try {
       final response = await dio.get(
         "$baseUrl/report-equipment/qr/${Uri.encodeComponent(qr.trim())}",
-        options: Options(validateStatus: (s) => s != null && s < 500),
+        // Reporter token proves "mine" vs "held by someone else".
+        options: _reporterOptions(
+          base: Options(validateStatus: (s) => s != null && s < 500),
+        ),
       );
       final data = response.data;
       if (data is Map) return Map<String, dynamic>.from(data);

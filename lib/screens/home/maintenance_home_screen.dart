@@ -74,16 +74,16 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
       imageAsset: "assets/images/qrscanner.png",
     ),
     _MaintenanceTool(
-      title: "Record Fix",
-      subtitle: "Log a repair",
+      title: "Room inspections",
+      subtitle: "Checklist rounds",
       meta: "On-site",
-      route: "/maintenance",
+      route: "/room-inspections",
       imageAsset: "assets/images/record_fix.png",
     ),
     _MaintenanceTool(
       title: "History",
-      subtitle: "Timeline log",
-      meta: "Past fixes",
+      subtitle: "Completed work",
+      meta: "Timeline log",
       route: "/history",
       imageAsset: "assets/images/history.png",
     ),
@@ -557,9 +557,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(child: _buildDashboardBody()),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 sliver: SliverToBoxAdapter(
                   child: const Text(
                     "Quick Actions",
@@ -572,7 +571,9 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   ),
                 ),
               ),
+              // Quick Actions sit above the overview chart (list-first home).
               SliverToBoxAdapter(child: _buildQuickActions()),
+              SliverToBoxAdapter(child: _buildDashboardBody()),
               const SliverToBoxAdapter(child: SizedBox(height: 72)),
             ],
           ),
@@ -621,7 +622,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
               height: 148,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                 children: [
                   _SummaryMetricCard(
                     title: "Total Equipment",
@@ -630,7 +631,13 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                     sparkline: _sparkFromCount(recent.equipmentCount, up: true),
                     changeLabel: "+${recent.equipmentCount}",
                     changePositive: true,
-                    footnote: "${recent.underMaintenance} in maintenance",
+                    // Prefer overdue signal — inventory "Under Maintenance" can
+                    // be 0 while schedules are already past due.
+                    footnote: recent.overdueSchedules > 0
+                        ? "${recent.overdueSchedules} overdue schedule${recent.overdueSchedules == 1 ? '' : 's'}"
+                        : recent.underMaintenance > 0
+                            ? "${recent.underMaintenance} in maintenance"
+                            : "No overdue schedules",
                     onTap: () => _pushAndKeepSearchClosed(
                       Navigator.pushNamed(context, "/equipment"),
                     ),
@@ -690,7 +697,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                     title: "Under Maintenance",
                     value: "${recent.underMaintenance}",
                     dateLabel: todayLabel,
-                    sparkline: _sparkFromCount(recent.underMaintenance, up: true),
+                    sparkline:
+                        _sparkFromCount(recent.underMaintenance, up: true),
                     changeLabel: "${recent.attentionEquipment.length} units",
                     changePositive: true,
                     footnote: "Needs attention",
@@ -1237,7 +1245,7 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                                 const EquipmentScreen(attentionOnly: true),
                           ),
                         )
-                      : Navigator.pushNamed(context, "/maintenance"),
+                      : Navigator.pushNamed(context, "/history"),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1594,7 +1602,8 @@ class _MaintenanceHomeScreenState extends State<MaintenanceHomeScreen> {
                   child: FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
+                      // Same blue as Continue with Microsoft / PaAyo mark.
+                      backgroundColor: const Color(0xFF002784),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -1939,6 +1948,181 @@ class _ActivityEmpty extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SummaryMetricCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String dateLabel;
+  final List<double> sparkline;
+  final String changeLabel;
+  final bool changePositive;
+  final String footnote;
+  final VoidCallback onTap;
+
+  const _SummaryMetricCard({
+    required this.title,
+    required this.value,
+    required this.dateLabel,
+    required this.sparkline,
+    required this.changeLabel,
+    required this.changePositive,
+    required this.footnote,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 260,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFEEF0F4)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    dateLabel,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.6,
+                        height: 1.05,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 56,
+                    height: 28,
+                    child: CustomPaint(
+                      painter: _HomeSparklinePainter(
+                        values: sparkline,
+                        color: changePositive
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    changeLabel,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: changePositive
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      footnote,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSparklinePainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+
+  _HomeSparklinePainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    final minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    final span = (maxV - minV).abs() < 0.001 ? 1.0 : maxV - minV;
+    const pad = 2.0;
+    final h = size.height - pad * 2;
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final x = size.width * (i / (values.length - 1));
+      final y = pad + h - ((values[i] - minV) / span) * h;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomeSparklinePainter oldDelegate) {
+    return oldDelegate.values != values || oldDelegate.color != color;
   }
 }
 
@@ -2320,140 +2504,6 @@ class _MonthDropdown extends StatelessWidget {
               ),
               const SizedBox(width: 2),
               const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryMetricCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String dateLabel;
-  final List<double> sparkline;
-  final String changeLabel;
-  final bool changePositive;
-  final String footnote;
-  final VoidCallback onTap;
-
-  const _SummaryMetricCard({
-    required this.title,
-    required this.value,
-    required this.dateLabel,
-    required this.sparkline,
-    required this.changeLabel,
-    required this.changePositive,
-    required this.footnote,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 260,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFEEF0F4)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    dateLabel,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                        letterSpacing: -0.6,
-                        height: 1.05,
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 56,
-                    height: 28,
-                    child: CustomPaint(
-                      painter: _HomeSparklinePainter(
-                        values: sparkline,
-                        color: changePositive
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFFEF4444),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    changeLabel,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: changePositive
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFFEF4444),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      footnote,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -2844,43 +2894,3 @@ class _HomeAreaLinePainter extends CustomPainter {
   }
 }
 
-class _HomeSparklinePainter extends CustomPainter {
-  final List<double> values;
-  final Color color;
-
-  _HomeSparklinePainter({required this.values, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-    final minV = values.reduce(math.min);
-    final maxV = values.reduce(math.max);
-    final span = (maxV - minV).abs() < 0.001 ? 1.0 : maxV - minV;
-    const pad = 2.0;
-    final h = size.height - pad * 2;
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = size.width * (i / (values.length - 1));
-      final y = pad + h - ((values[i] - minV) / span) * h;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _HomeSparklinePainter oldDelegate) {
-    return oldDelegate.values != values || oldDelegate.color != color;
-  }
-}

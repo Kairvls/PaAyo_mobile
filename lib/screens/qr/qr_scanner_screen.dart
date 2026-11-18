@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../models/computer_set_scan.dart';
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/semester_inspection_service.dart';
+import '../../widgets/computer_set_member_sheet.dart';
 import '../equipment/equipment_profile_screen.dart';
 import '../history/equipment_history_screen.dart';
 import '../maintenance/record_maintenance_screen.dart';
@@ -130,7 +132,42 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     Equipment equipment;
     try {
       // Keep showing "Scanning…" while we hit the API.
-      equipment = await _service.getEquipmentByQr(code);
+      final resolved = await _service.resolveQr(code);
+
+      if (resolved is MaintenanceQrComputerSet) {
+        if (_locked) {
+          _lastMissedCode = code;
+          await _resumeWithMessage(
+            "That QR belongs to a computer set. Scan the QR on $_targetName.",
+          );
+          return;
+        }
+
+        if (!mounted) return;
+        if (resolved.computerSet.members.isEmpty) {
+          await _resumeWithMessage(
+            "This computer set has no equipment members yet.",
+          );
+          return;
+        }
+
+        final picked = await showComputerSetMemberPicker(
+          context: context,
+          computerSet: resolved.computerSet,
+        );
+        if (!mounted) return;
+        if (picked == null) {
+          setState(() => _phase = _ScanPhase.scanning);
+          _handling = false;
+          await _controller.start();
+          return;
+        }
+        equipment = picked;
+      } else if (resolved is MaintenanceQrEquipment) {
+        equipment = resolved.equipment;
+      } else {
+        throw const EquipmentNotFoundException();
+      }
     } on EquipmentNotFoundException {
       _missCount += 1;
       _lastMissedCode = code;
@@ -200,6 +237,13 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     if (!mounted) return;
 
     if (error != null) {
+      // Empty string = user cancelled a follow-up picker (e.g. set members).
+      if (error.trim().isEmpty) {
+        setState(() => _phase = _ScanPhase.scanning);
+        _handling = false;
+        await _controller.start();
+        return;
+      }
       _lastMissedCode = code;
       await _resumeWithMessage(error);
       return;

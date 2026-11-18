@@ -276,7 +276,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
           elevation: 0,
           foregroundColor: _ink,
           title: const Text(
-            "Record Fix",
+            "Log repair",
             style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
           ),
           actions: [

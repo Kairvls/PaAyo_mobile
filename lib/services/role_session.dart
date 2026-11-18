@@ -1,9 +1,11 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Persists roles from login. Mobile is Maintenance-only (primary or additional).
+/// Persists roles from login.
+/// Allowed: System Administrator and Maintenance (primary or additional).
 class RoleSession {
   RoleSession._();
 
+  static const adminRoleId = 1;
   static const maintenanceRoleId = 2;
 
   static const tokenKey = "token";
@@ -56,9 +58,18 @@ class RoleSession {
     if (allRoles.isNotEmpty) {
       await _storage.write(key: roleIdsKey, value: allRoles.join(","));
     }
+    final active = int.tryParse(
+          (user["active_role"] ?? data["active_role"])?.toString() ?? "",
+        ) ??
+        (allRoles.contains(maintenanceRoleId)
+            ? maintenanceRoleId
+            : (allRoles.contains(adminRoleId)
+                ? adminRoleId
+                : maintenanceRoleId));
+
     await _storage.write(
       key: roleIdKey,
-      value: maintenanceRoleId.toString(),
+      value: active.toString(),
     );
   }
 

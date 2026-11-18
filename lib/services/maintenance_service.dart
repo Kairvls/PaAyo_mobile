@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart';
 
+import '../core/constants/api.dart';
+import '../models/computer_set_scan.dart';
 import '../models/equipment.dart';
 import '../models/equipment_full_profile.dart';
 import '../models/maintenance_report.dart';
@@ -18,7 +20,7 @@ class EquipmentNotFoundException implements Exception {
 }
 
 class MaintenanceService {
-  static const String baseUrl = "http://192.168.1.25:8000/api";
+  static const String baseUrl = Api.baseUrl;
 
   final Dio dio = Dio(
     BaseOptions(
@@ -39,9 +41,14 @@ class MaintenanceService {
   }
 
   /// GET /maintenance/equipment/{qr}
-  Future<Equipment> getEquipmentByQr(String qr) async {
+  /// Resolves either a single equipment QR or a computer-set QR.
+  Future<MaintenanceQrResolve> resolveQr(String qr) async {
     await _attachToken();
-    final res = await dio.get("$baseUrl/maintenance/equipment/$qr");
+    final encoded = Uri.encodeComponent(qr.trim());
+    final res = await dio.get(
+      "$baseUrl/maintenance/equipment/$encoded",
+      options: Options(validateStatus: (s) => s != null && s < 500),
+    );
     final data = res.data;
 
     if (res.statusCode == 404 ||
@@ -49,13 +56,64 @@ class MaintenanceService {
       throw const EquipmentNotFoundException();
     }
 
-    if (res.statusCode == 200 && data is Map && data["equipment"] != null) {
-      return Equipment.fromJson(
-        Map<String, dynamic>.from(data["equipment"] as Map),
-      );
+    if (res.statusCode == 200 && data is Map) {
+      final type = data["type"]?.toString();
+      if (type == "computer_set" &&
+          data["computer_set"] is Map &&
+          data["members"] is List) {
+        return MaintenanceQrComputerSet(
+          ComputerSetScan.fromJson(
+            Map<String, dynamic>.from(data["computer_set"] as Map),
+            data["members"] as List,
+          ),
+        );
+      }
+
+      if (data["equipment"] != null) {
+        return MaintenanceQrEquipment(
+          Equipment.fromJson(
+            Map<String, dynamic>.from(data["equipment"] as Map),
+          ),
+        );
+      }
     }
 
     throw Exception("Unable to load equipment.");
+  }
+
+  /// GET /maintenance/equipment/{qr} — single equipment only.
+  Future<Equipment> getEquipmentByQr(String qr) async {
+    final resolved = await resolveQr(qr);
+    if (resolved is MaintenanceQrEquipment) return resolved.equipment;
+    throw const EquipmentNotFoundException();
+  }
+
+  /// POST /maintenance/schedule/{id}/complete
+  Future<Response> completeSchedule({
+    required int scheduleId,
+    required String findings,
+    required String repairAction,
+    required String maintenanceStatus,
+    String? replacementRemarks,
+    String? proofImagePath,
+  }) async {
+    await _attachToken();
+
+    final form = FormData.fromMap({
+      "findings": findings,
+      "repair_action": repairAction,
+      "maintenance_status": maintenanceStatus,
+      if (replacementRemarks != null && replacementRemarks.trim().isNotEmpty)
+        "replacement_remarks": replacementRemarks.trim(),
+      if (proofImagePath != null && proofImagePath.isNotEmpty)
+        "proof_image": await MultipartFile.fromFile(proofImagePath),
+    });
+
+    return await dio.post(
+      "$baseUrl/maintenance/schedule/$scheduleId/complete",
+      data: form,
+      options: Options(validateStatus: (s) => s != null && s < 500),
+    );
   }
 
   /// GET /maintenance/equipment/{id}/profile

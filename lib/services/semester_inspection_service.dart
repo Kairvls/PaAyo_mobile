@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart';
 
+import '../core/constants/api.dart';
 import '../models/semester_inspection.dart';
 
 class SemesterInspectionException implements Exception {
@@ -17,7 +18,7 @@ class SemesterInspectionException implements Exception {
 }
 
 class SemesterInspectionService {
-  static const String baseUrl = "http://192.168.1.25:8000/api";
+  static const String baseUrl = Api.baseUrl;
 
   final Dio dio = Dio(
     BaseOptions(

@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen>
   static const _actions = [
     _HomeAction(
       eyebrow:  "REPORT",
-      headline: "Report Defective\nEquipment",
+      headline: "Report Damaged\nEquipment",
       subtitle: "Let us know about broken furniture,\nfaulty lights, or malfunctioning tech.",
       cta:      "Report an Issue",
       route:    "/report",

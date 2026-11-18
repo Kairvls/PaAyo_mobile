@@ -14,6 +14,8 @@ import '../qr/view_details_sheets.dart';
 
 enum _HistoryChartRange { week, month }
 
+enum _HistoryStatusFilter { completed, all }
+
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -31,6 +33,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   late final TextEditingController _search;
   late Future<List<MaintenanceRecord>> _future;
   _HistoryChartRange _chartRange = _HistoryChartRange.month;
+  _HistoryStatusFilter _statusFilter = _HistoryStatusFilter.completed;
+  DateTime? _dayFilter;
 
   @override
   void initState() {
@@ -52,9 +56,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   List<MaintenanceRecord> _filter(List<MaintenanceRecord> items) {
+    var list = items;
+
+    if (_statusFilter == _HistoryStatusFilter.completed) {
+      list = list.where(_isResolved).toList();
+    }
+
+    if (_dayFilter != null) {
+      final day = DateTime(_dayFilter!.year, _dayFilter!.month, _dayFilter!.day);
+      list = list.where((r) {
+        final d = r.date.toLocal();
+        return d.year == day.year && d.month == day.month && d.day == day.day;
+      }).toList();
+    }
+
     final q = _search.text.trim().toLowerCase();
-    if (q.isEmpty) return items;
-    return items.where((r) {
+    if (q.isEmpty) return list;
+    return list.where((r) {
       final hay = [
         r.equipmentName ?? "",
         r.room ?? "",
@@ -66,6 +84,77 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ].join(" ").toLowerCase();
       return hay.contains(q);
     }).toList();
+  }
+
+  Future<void> _pickDayFilter() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dayFilter ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      helpText: "Filter by completion date",
+    );
+    if (!mounted) return;
+    setState(() => _dayFilter = picked);
+  }
+
+  Future<void> _pickStatusFilter() async {
+    final chosen = await showModalBottomSheet<_HistoryStatusFilter>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline_rounded),
+                title: const Text("Completed maintenance"),
+                subtitle: const Text("Schedule completes & finished fixes"),
+                trailing: _statusFilter == _HistoryStatusFilter.completed
+                    ? const Icon(Icons.check_rounded, color: _blue)
+                    : null,
+                onTap: () =>
+                    Navigator.pop(context, _HistoryStatusFilter.completed),
+              ),
+              ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: const Text("All history"),
+                trailing: _statusFilter == _HistoryStatusFilter.all
+                    ? const Icon(Icons.check_rounded, color: _blue)
+                    : null,
+                onTap: () => Navigator.pop(context, _HistoryStatusFilter.all),
+              ),
+              if (_dayFilter != null)
+                ListTile(
+                  leading: const Icon(Icons.event_busy_rounded),
+                  title: const Text("Clear date filter"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _dayFilter = null);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen != null && mounted) {
+      setState(() => _statusFilter = chosen);
+    }
   }
 
   bool _isResolved(MaintenanceRecord r) {
@@ -400,14 +489,60 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                           ),
                           const SizedBox(height: 22),
-                          const Text(
-                            "Recent history",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: _ink,
-                            ),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  "Timeline log",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: _ink,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: "Filter",
+                                onPressed: _pickStatusFilter,
+                                icon: Icon(
+                                  Icons.filter_list_rounded,
+                                  color: _statusFilter ==
+                                          _HistoryStatusFilter.completed
+                                      ? _blue
+                                      : _ink,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: _dayFilter == null
+                                    ? "Filter by date"
+                                    : "Change date filter",
+                                onPressed: _pickDayFilter,
+                                icon: Icon(
+                                  Icons.calendar_month_rounded,
+                                  color: _dayFilter != null ? _blue : _ink,
+                                ),
+                              ),
+                            ],
                           ),
+                          if (_dayFilter != null) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () =>
+                                    setState(() => _dayFilter = null),
+                                icon: const Icon(Icons.close_rounded, size: 16),
+                                label: Text(
+                                  "Date: ${DateFormat("MMM d, yyyy").format(_dayFilter!)}",
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: _blue,
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           _SearchField(
                             controller: _search,
@@ -422,16 +557,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       hasScrollBody: false,
                       child: _EmptyHistory(),
                     )
-                  else if (items.isEmpty && searching)
-                    const SliverFillRemaining(
+                  else if (items.isEmpty)
+                    SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(
                         child: Padding(
-                          padding: EdgeInsets.all(32),
+                          padding: const EdgeInsets.all(32),
                           child: Text(
-                            "No history matches your search.",
+                            searching
+                                ? "No history matches your search."
+                                : _dayFilter != null
+                                    ? "No completed maintenance on that date."
+                                    : "No completed maintenance in this filter.",
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: _muted, height: 1.4),
+                            style: const TextStyle(color: _muted, height: 1.4),
                           ),
                         ),
                       ),
@@ -518,7 +657,7 @@ class _HeroHeader extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              "Maintenance history at a glance",
+              "Completed maintenance log",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 26,
@@ -532,7 +671,7 @@ class _HeroHeader extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              "Track past fixes, resolution rates, and weekly activity across campus equipment.",
+              "Timeline of equipment you finished — schedule completes and on-site fixes.",
               style: TextStyle(
                 color: Color(0xFFE0EAFF),
                 fontSize: 13.5,
@@ -673,7 +812,7 @@ class _EmptyHistory extends StatelessWidget {
                 size: 48, color: Color(0xFF94A3B8)),
             const SizedBox(height: 12),
             const Text(
-              "No maintenance history yet",
+              "No completed maintenance yet",
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 17,
@@ -682,15 +821,15 @@ class _EmptyHistory extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             const Text(
-              "Record a fix from Quick Actions or by scanning QR.",
+              "Finish a schedule from Equipment or scan QR to complete maintenance — it shows up here.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF9CA3AF)),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => Navigator.pushNamed(context, "/maintenance"),
-              icon: const Icon(Icons.build_rounded),
-              label: const Text("Record a fix"),
+              onPressed: () => Navigator.pushNamed(context, "/schedule"),
+              icon: const Icon(Icons.event_available_rounded),
+              label: const Text("Open schedules"),
             ),
           ],
         ),

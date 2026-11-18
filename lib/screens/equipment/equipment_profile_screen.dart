@@ -9,7 +9,6 @@ import '../../widgets/equipment_full_profile_view.dart';
 import '../history/equipment_history_screen.dart';
 import '../maintenance/record_maintenance_screen.dart';
 import '../schedule/equipment_schedule_screen.dart';
-import 'edit_equipment_screen.dart';
 
 class EquipmentProfileScreen extends StatefulWidget {
   final Equipment equipment;
@@ -94,27 +93,49 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
     await _loadSchedules();
   }
 
-  Future<void> _openRecordMaintenance() async {
+  /// Mirrors web: completable within 7 days of next date, or overdue.
+  MaintenanceSchedule? get _completableSchedule {
+    final items = _schedules ?? [];
+    final openDays = 7;
+    final today = DateTime.now();
+    final day = DateTime(today.year, today.month, today.day);
+
+    MaintenanceSchedule? best;
+    for (final s in items) {
+      final status = s.status.toLowerCase();
+      if (status.contains("completed")) continue;
+      if (s.nextDate == null) continue;
+      final next = DateTime(s.nextDate!.year, s.nextDate!.month, s.nextDate!.day);
+      final openFrom = next.subtract(Duration(days: openDays));
+      if (day.isBefore(openFrom)) continue;
+      if (best == null ||
+          (s.isOverdue && !best.isOverdue) ||
+          (s.nextDate != null &&
+              best.nextDate != null &&
+              s.nextDate!.isBefore(best.nextDate!))) {
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  Future<void> _openCompleteOrSchedule() async {
+    final schedule = _completableSchedule;
+    if (schedule == null) {
+      await _openSchedule();
+      return;
+    }
+
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => RecordMaintenanceScreen(equipment: _equipment),
+        builder: (_) => RecordMaintenanceScreen(
+          equipment: _equipment,
+          completeSchedule: schedule,
+        ),
       ),
     );
     if (saved == true) _refresh();
-  }
-
-  Future<void> _openEdit() async {
-    final updated = await Navigator.push<Equipment>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditEquipmentScreen(equipment: _equipment),
-      ),
-    );
-    if (updated != null && mounted) {
-      setState(() => _equipment = updated);
-      _reloadProfile();
-    }
   }
 
   Future<void> _openSchedule() async {
@@ -225,10 +246,7 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
             onTap: () => Navigator.pop(context),
           ),
           const Spacer(),
-          _CircleButton(
-            icon: Icons.edit_outlined,
-            onTap: _openEdit,
-          ),
+          // Equipment identity is set on web — mobile only tracks maintenance.
         ],
       ),
     );
@@ -564,12 +582,6 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
             label: "History",
             hint: "Past fixes",
             onTap: _openHistory,
-          ),
-          _NavRow(
-            icon: Icons.tune_rounded,
-            label: "Edit details",
-            hint: "Update info",
-            onTap: _openEdit,
             showDivider: false,
           ),
         ],
@@ -578,6 +590,11 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
   }
 
   Widget _buildBottomBar() {
+    final canComplete = _completableSchedule != null;
+    final label = canComplete ? "Complete maintenance" : "Set schedule";
+    final icon =
+        canComplete ? Icons.event_available_rounded : Icons.event_rounded;
+
     return SafeArea(
       top: false,
       child: Padding(
@@ -586,7 +603,7 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
           height: 56,
           width: double.infinity,
           child: FilledButton(
-            onPressed: _openRecordMaintenance,
+            onPressed: _openCompleteOrSchedule,
             style: FilledButton.styleFrom(
               backgroundColor: _blue,
               foregroundColor: Colors.white,
@@ -595,14 +612,14 @@ class _EquipmentProfileScreenState extends State<EquipmentProfileScreen> {
                 borderRadius: BorderRadius.circular(18),
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.build_rounded, size: 18, color: _accent),
-                SizedBox(width: 10),
+                Icon(icon, size: 18, color: _accent),
+                const SizedBox(width: 10),
                 Text(
-                  "Record Fix",
-                  style: TextStyle(
+                  label,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.2,

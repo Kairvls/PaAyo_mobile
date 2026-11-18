@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
+import '../core/constants/api.dart';
 
 class AuthService {
-  static const String baseUrl = "http://192.168.1.25:8000/api";
+  static const String baseUrl = Api.baseUrl;
 
   final Dio dio = Dio(
     BaseOptions(

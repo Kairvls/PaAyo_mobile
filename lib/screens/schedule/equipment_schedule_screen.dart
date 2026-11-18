@@ -72,131 +72,145 @@ class _EquipmentScheduleScreenState extends State<EquipmentScheduleScreen> {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
 
-    return Scaffold(
-      backgroundColor: _page,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _create,
-        backgroundColor: const Color(0xFF0025CC),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          "Create schedule",
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
-            child: Row(
-              children: [
-                Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.pop(context),
-                    child: const SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: Icon(Icons.arrow_back_rounded,
-                          size: 20, color: _ink),
-                    ),
-                  ),
-                ),
-                const Expanded(
-                  child: Text(
-                    "Schedule",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _ink,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 44),
-              ],
-            ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<MaintenanceSchedule>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: _ink,
-                    ),
-                  );
-                }
+    return FutureBuilder<List<MaintenanceSchedule>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final loading =
+            snapshot.connectionState == ConnectionState.waiting;
+        final schedules = snapshot.data ?? [];
+        // Empty state already has an in-card CTA — only show FAB when
+        // schedules exist so users can add another.
+        final showFab = !loading && schedules.isNotEmpty;
 
-                final schedules = snapshot.data ?? [];
-
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        return Scaffold(
+          backgroundColor: _page,
+          floatingActionButton: showFab
+              ? FloatingActionButton.extended(
+                  onPressed: _create,
+                  backgroundColor: const Color(0xFF0025CC),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text(
+                    "Create schedule",
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                )
+              : null,
+          body: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
+                child: Row(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.equipment.name,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: _ink,
-                              letterSpacing: -0.4,
-                              height: 1.15,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            widget.equipment.qrId,
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: _muted,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          if (schedules.isEmpty)
-                            _buildEmpty()
-                          else
-                            for (final s in schedules)
-                              _ScheduleCard(
-                                schedule: s,
-                                color: _statusColor(s),
-                                onTap: () => _edit(s),
-                              ),
-                        ],
+                    Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => Navigator.pop(context),
+                        child: const SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(Icons.arrow_back_rounded,
+                              size: 20, color: _ink),
+                        ),
                       ),
                     ),
+                    const Expanded(
+                      child: Text(
+                        "Schedule",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 44),
                   ],
-                );
-              },
-            ),
+                ),
+              ),
+              Expanded(
+                child: loading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: _ink,
+                        ),
+                      )
+                    : ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          showFab ? 100 : 28,
+                        ),
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black
+                                      .withValues(alpha: 0.06),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.equipment.name,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: _ink,
+                                    letterSpacing: -0.4,
+                                    height: 1.15,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  widget.equipment.qrId,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _muted,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                if (schedules.isEmpty)
+                                  _buildEmpty()
+                                else
+                                  for (final s in schedules)
+                                    _ScheduleCard(
+                                      schedule: s,
+                                      color: _statusColor(s),
+                                      onTap: () => _edit(s),
+                                    ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -377,11 +391,12 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
   static const _border = Color(0xFFE5E7EB);
 
   static const _statuses = ["Active", "Completed", "Overdue"];
+  /// Labels match STI-PRISM `EquipmentSchedules::FREQUENCIES` (+ Weekly).
   static const _frequencies = [
     "Weekly",
     "Monthly",
     "Quarterly",
-    "Semi-Annual",
+    "Semi Annual",
     "Annual",
   ];
 
@@ -396,6 +411,65 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
 
   bool get _isCreate => widget.schedule == null;
 
+  /// Align mobile aliases with web (`Semi-Annual` → `Semi Annual`).
+  static String normalizeFrequency(String? raw) {
+    final t = (raw ?? "").trim();
+    final key = t.toLowerCase().replaceAll("-", " ").replaceAll(RegExp(r"\s+"), " ");
+    if (key == "semi annual") return "Semi Annual";
+    for (final f in _frequencies) {
+      if (f.toLowerCase() == key) return f;
+    }
+    return "Monthly";
+  }
+
+  static DateTime _addMonthsNoOverflow(DateTime d, int months) {
+    final total = d.month - 1 + months;
+    final year = d.year + total ~/ 12;
+    final month = total % 12 + 1;
+    final lastDay = DateTime(year, month + 1, 0).day;
+    final day = d.day > lastDay ? lastDay : d.day;
+    return DateTime(year, month, day);
+  }
+
+  /// First due date after today for [frequency], mirroring web
+  /// `EquipmentSchedules::nextDateAfter` (step from today).
+  static DateTime nextDateForFrequency(String frequency) {
+    final today = DateTime.now();
+    final day = DateTime(today.year, today.month, today.day);
+    var date = day;
+
+    DateTime step(DateTime d) {
+      switch (normalizeFrequency(frequency)) {
+        case "Weekly":
+          return d.add(const Duration(days: 7));
+        case "Monthly":
+          return _addMonthsNoOverflow(d, 1);
+        case "Quarterly":
+          return _addMonthsNoOverflow(d, 3);
+        case "Semi Annual":
+          return _addMonthsNoOverflow(d, 6);
+        case "Annual":
+          return _addMonthsNoOverflow(d, 12);
+        default:
+          return _addMonthsNoOverflow(d, 1);
+      }
+    }
+
+    do {
+      date = step(date);
+    } while (!date.isAfter(day));
+
+    return date;
+  }
+
+  void _setFrequency(String frequency) {
+    final next = normalizeFrequency(frequency);
+    setState(() {
+      _frequency = next;
+      _nextDate = nextDateForFrequency(next);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -404,10 +478,9 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
       text: s == null || s.title == "—" ? "" : s.title,
     );
     _description = TextEditingController(text: s?.description ?? "");
-    _frequency =
-        s != null && _frequencies.contains(s.frequency) ? s.frequency : "Monthly";
+    _frequency = normalizeFrequency(s?.frequency);
     _status = s != null && _statuses.contains(s.status) ? s.status : "Active";
-    _nextDate = s?.nextDate ?? DateTime.now().add(const Duration(days: 30));
+    _nextDate = s?.nextDate ?? nextDateForFrequency(_frequency);
   }
 
   @override
@@ -707,7 +780,7 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
                           _chip(
                             f,
                             _frequency == f,
-                            () => setState(() => _frequency = f),
+                            () => _setFrequency(f),
                           ),
                       ],
                     ),

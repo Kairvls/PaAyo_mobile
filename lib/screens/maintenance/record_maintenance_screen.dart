@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,7 +11,15 @@ import '../../services/maintenance_service.dart';
 class RecordMaintenanceScreen extends StatefulWidget {
   final Equipment equipment;
 
-  const RecordMaintenanceScreen({super.key, required this.equipment});
+  /// When set, save completes this schedule cycle (web parity) instead of
+  /// only writing a standalone repair history row.
+  final MaintenanceSchedule? completeSchedule;
+
+  const RecordMaintenanceScreen({
+    super.key,
+    required this.equipment,
+    this.completeSchedule,
+  });
 
   @override
   State<RecordMaintenanceScreen> createState() =>
@@ -46,6 +55,11 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
   bool _saving = false;
 
   bool get _isReplacement => _status == "For Replacement";
+
+  bool get _isCompleting => widget.completeSchedule != null;
+
+  String get _title =>
+      _isCompleting ? "Complete maintenance" : "Log repair";
 
   @override
   void dispose() {
@@ -91,6 +105,10 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
       _snack("Please describe your findings.");
       return;
     }
+    if (_isCompleting && _repairAction.text.trim().isEmpty) {
+      _snack("Please enter the repair / service action.");
+      return;
+    }
 
     final personnelIdStr = await _storage.read(key: "user_id");
     final personnelId = int.tryParse(personnelIdStr ?? "");
@@ -102,17 +120,30 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
     setState(() => _saving = true);
 
     try {
-      final res = await _service.storeHistory(
-        equipmentId: widget.equipment.id,
-        personnelId: personnelId,
-        findings: _findings.text.trim(),
-        status: _status,
-        repairAction: _repairAction.text.trim(),
-        replacementRemarks: _replacementRemarks.text.trim(),
-        proofImage: _proof,
-      );
+      final Response res;
+      if (_isCompleting) {
+        res = await _service.completeSchedule(
+          scheduleId: widget.completeSchedule!.id,
+          findings: _findings.text.trim(),
+          repairAction: _repairAction.text.trim(),
+          maintenanceStatus: _status,
+          replacementRemarks: _replacementRemarks.text.trim(),
+          proofImagePath: _proof?.path,
+        );
+      } else {
+        res = await _service.storeHistory(
+          equipmentId: widget.equipment.id,
+          personnelId: personnelId,
+          findings: _findings.text.trim(),
+          status: _status,
+          repairAction: _repairAction.text.trim(),
+          replacementRemarks: _replacementRemarks.text.trim(),
+          proofImage: _proof,
+        );
+      }
 
-      final ok = res.statusCode == 201 ||
+      final ok = res.statusCode == 200 ||
+          res.statusCode == 201 ||
           (res.data is Map && res.data["success"] == true);
 
       if (!mounted) return;
@@ -120,7 +151,12 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
 
       if (!ok) {
         final msg = res.data is Map ? res.data["message"]?.toString() : null;
-        _snack(msg ?? "Could not save the maintenance record.");
+        _snack(
+          msg ??
+              (_isCompleting
+                  ? "Could not complete this maintenance."
+                  : "Could not save the maintenance record."),
+        );
         return;
       }
 
@@ -132,12 +168,14 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
           ),
           icon: const Icon(Icons.check_circle_rounded,
               color: Color(0xFF22C55E), size: 40),
-          title: const Text(
-            "Maintenance saved",
-            style: TextStyle(fontWeight: FontWeight.w800),
+          title: Text(
+            _isCompleting ? "Maintenance completed" : "Repair logged",
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           content: Text(
-            "$_status record saved for ${widget.equipment.name}.",
+            _isCompleting
+                ? "Schedule advanced for ${widget.equipment.name}."
+                : "$_status record saved for ${widget.equipment.name}.",
             textAlign: TextAlign.center,
           ),
           actions: [
@@ -185,11 +223,11 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
                   icon: Icons.arrow_back_rounded,
                   onTap: () => Navigator.pop(context),
                 ),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    "Record Fix",
+                    _title,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: _ink,
@@ -222,9 +260,9 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Record fix",
-                      style: TextStyle(
+                    Text(
+                      _isCompleting ? "Complete maintenance" : "Log repair",
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: _muted,
@@ -251,6 +289,28 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
                         letterSpacing: 0.3,
                       ),
                     ),
+                    if (_isCompleting) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF4FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          "Schedule: ${widget.completeSchedule!.title}"
+                          "${widget.completeSchedule!.relativeDueLabel.isNotEmpty ? ' · ${widget.completeSchedule!.relativeDueLabel}' : ''}"
+                          "\nCompleting advances the next due date for recurring schedules.",
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E3A8A),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 22),
                     _label("Status"),
                     const SizedBox(height: 12),
@@ -324,15 +384,22 @@ class _RecordMaintenanceScreenState extends State<RecordMaintenanceScreen> {
                             ),
                           ),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.build_rounded,
-                                size: 18, color: _accent),
-                            SizedBox(width: 10),
+                            Icon(
+                              _isCompleting
+                                  ? Icons.event_available_rounded
+                                  : Icons.build_rounded,
+                              size: 18,
+                              color: _accent,
+                            ),
+                            const SizedBox(width: 10),
                             Text(
-                              "Save Record",
-                              style: TextStyle(
+                              _isCompleting
+                                  ? "Mark complete"
+                                  : "Save repair log",
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.2,

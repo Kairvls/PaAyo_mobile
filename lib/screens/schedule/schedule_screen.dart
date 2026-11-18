@@ -7,13 +7,12 @@ import 'package:intl/intl.dart';
 import '../../models/equipment.dart';
 import '../../services/maintenance_service.dart';
 import '../../widgets/product_list_row.dart';
-import '../../widgets/chart_tooltip.dart';
 import '../qr/qr_scanner_screen.dart';
 import '../qr/view_details_sheets.dart';
 
 enum _ScheduleRange { monthly, weekly, today }
 
-const _scheduleBlue = Color(0xFF0025CC);
+const _scheduleBlue = Color(0xFF002784);
 const _scheduleAccent = Color(0xFFFFF200);
 
 class ScheduleScreen extends StatefulWidget {
@@ -35,8 +34,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   final MaintenanceService _service = MaintenanceService();
   final TextEditingController _search = TextEditingController();
   late Future<List<MaintenanceSchedule>> _future;
-  _ScheduleRange _chartRange = _ScheduleRange.weekly;
-  _ScheduleRange _listRange = _ScheduleRange.weekly;
+  _ScheduleRange _range = _ScheduleRange.weekly;
 
   @override
   void initState() {
@@ -94,129 +92,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  /// Dual series for the area chart based on selected range.
-  /// Dense samples so peaks can sit between day labels (like the mock),
-  /// then drawn with smooth curves. Tip series stay 1:1 with labels.
-  ({
-    List<String> labels,
-    List<double> primary,
-    List<double> secondary,
-    List<double> tipPrimary,
-    List<double> tipSecondary,
-  }) _chartSeries(List<MaintenanceSchedule> all) {
-    final daily = switch (_chartRange) {
-      _ScheduleRange.monthly => _bucketCounts(all, buckets: 7, spanDays: 4),
-      _ => _dayCounts(all, days: 7),
-    };
-    final jagged = _jaggedFromDaily(daily);
-    return (
-      labels: jagged.labels,
-      primary: jagged.primary,
-      secondary: jagged.secondary,
-      tipPrimary: daily.map((e) => e.due).toList(),
-      tipSecondary: daily.map((e) => math.max(e.total, e.due)).toList(),
-    );
-  }
-
-  List<({String label, double due, double total})> _dayCounts(
-    List<MaintenanceSchedule> all, {
-    required int days,
-  }) {
-    final out = <({String label, double due, double total})>[];
-    for (var i = days - 1; i >= 0; i--) {
-      final day = _today.subtract(Duration(days: i));
-      var due = 0;
-      var total = 0;
-      for (final s in all) {
-        if (s.nextDate == null) continue;
-        final d =
-            DateTime(s.nextDate!.year, s.nextDate!.month, s.nextDate!.day);
-        if (d.year != day.year || d.month != day.month || d.day != day.day) {
-          continue;
-        }
-        total++;
-        if (s.isOverdue || s.isDueSoon) due++;
-      }
-      out.add((
-        label: DateFormat("E").format(day).substring(0, 1),
-        due: due.toDouble(),
-        total: total.toDouble(),
-      ));
-    }
-    return out;
-  }
-
-  List<({String label, double due, double total})> _bucketCounts(
-    List<MaintenanceSchedule> all, {
-    required int buckets,
-    required int spanDays,
-  }) {
-    final out = <({String label, double due, double total})>[];
-    for (var w = 0; w < buckets; w++) {
-      final end =
-          _today.subtract(Duration(days: (buckets - 1 - w) * spanDays));
-      final start = end.subtract(Duration(days: spanDays - 1));
-      var due = 0;
-      var total = 0;
-      for (final s in all) {
-        if (s.nextDate == null) continue;
-        final d =
-            DateTime(s.nextDate!.year, s.nextDate!.month, s.nextDate!.day);
-        if (d.isBefore(start) || d.isAfter(end)) continue;
-        total++;
-        if (s.isOverdue || s.isDueSoon) due++;
-      }
-      out.add((
-        label: DateFormat("E").format(end).substring(0, 1),
-        due: due.toDouble(),
-        total: total.toDouble(),
-      ));
-    }
-    return out;
-  }
-
-  /// Expands daily totals into a multi-peak series like the mock.
-  ({List<String> labels, List<double> primary, List<double> secondary})
-      _jaggedFromDaily(List<({String label, double due, double total})> daily) {
-    final labels = daily.map((e) => e.label).toList();
-    final primary = <double>[];
-    final secondary = <double>[];
-
-    for (var i = 0; i < daily.length; i++) {
-      final due = daily[i].due;
-      final total = math.max(daily[i].total, due);
-      final neighbor = i > 0
-          ? daily[i - 1].total
-          : (i + 1 < daily.length ? daily[i + 1].total : 0.0);
-      final greyBase =
-          total > 0 ? total : (neighbor > 0 ? neighbor * 0.35 : 0.0);
-      final darkBase =
-          due > 0 ? due : (total > 0 ? total * 0.45 : 0.0);
-
-      if (i == 0) {
-        secondary.add(greyBase * 0.35);
-        primary.add(0);
-      }
-      secondary.add(greyBase * 1.0);
-      primary.add(darkBase * 0.95);
-      secondary.add(greyBase * 0.55);
-      primary.add(darkBase * 0.30);
-      if (i == daily.length - 1) {
-        secondary.add(0);
-        primary.add(0);
-      } else {
-        secondary.add(greyBase * 0.40);
-        primary.add(darkBase * 0.15);
-      }
-    }
-
-    for (var i = 0; i < primary.length; i++) {
-      if (secondary[i] < primary[i]) secondary[i] = primary[i] * 1.15;
-    }
-
-    return (labels: labels, primary: primary, secondary: secondary);
-  }
-
   List<MaintenanceSchedule> _listItems(List<MaintenanceSchedule> all) {
     final sorted = [...all]..sort((a, b) {
         final ad = a.nextDate ?? DateTime(2100);
@@ -226,7 +101,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
     DateTime start;
     DateTime end;
-    switch (_listRange) {
+    switch (_range) {
       case _ScheduleRange.today:
         start = _today;
         end = _today;
@@ -239,13 +114,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     final filtered = sorted.where((s) {
-      if (s.nextDate == null) return _listRange == _ScheduleRange.monthly;
+      if (s.nextDate == null) return _range == _ScheduleRange.monthly;
       final d = DateTime(s.nextDate!.year, s.nextDate!.month, s.nextDate!.day);
       return !d.isBefore(start) && !d.isAfter(end);
     }).toList();
 
-    final ranged = filtered.isEmpty ? sorted : filtered;
-    return _filterSearch(ranged);
+    return _filterSearch(filtered);
   }
 
   List<MaintenanceSchedule> _filterSearch(List<MaintenanceSchedule> items) {
@@ -395,19 +269,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
               final dateFmt = DateFormat("MMM d, yyyy");
               final all = snap.data ?? [];
-              final total = all.length;
-              final attention =
-                  all.where((s) => s.isOverdue || s.isDueSoon).length;
-              final avg = total == 0
-                  ? 0
-                  : (all
-                              .where((s) => s.nextDate != null)
-                              .map(_daysDelta)
-                              .fold<int>(0, (a, b) => a + b.abs()) /
-                          math.max(1, all.where((s) => s.nextDate != null).length))
-                      .round();
-              final series = _chartSeries(all);
               final items = _listItems(all);
+              final total = items.length;
+              final attention =
+                  items.where((s) => s.isOverdue || s.isDueSoon).length;
+              final dated = items.where((s) => s.nextDate != null).toList();
+              final avg = dated.isEmpty
+                  ? 0
+                  : (dated.map(_daysDelta).fold<int>(0, (a, b) => a + b.abs()) /
+                          dated.length)
+                      .round();
               final bottomPad = widget.embedded ? 100.0 : 28.0;
 
               return RefreshIndicator(
@@ -467,7 +338,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               children: [
                                 const Expanded(
                                   child: Text(
-                                    "Chart Orders",
+                                    "Overview",
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800,
@@ -477,9 +348,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   ),
                                 ),
                                 _RangeToggle(
-                                  value: _chartRange,
+                                  value: _range,
                                   onChanged: (v) =>
-                                      setState(() => _chartRange = v),
+                                      setState(() => _range = v),
                                 ),
                               ],
                             ),
@@ -488,7 +359,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               children: [
                                 Expanded(
                                   child: _KpiCard(
-                                    icon: Icons.bar_chart_rounded,
+                                    icon: Icons.event_note_rounded,
                                     value: _formatCount(total),
                                     label: "Total Schedules",
                                   ),
@@ -496,7 +367,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _KpiCard(
-                                    icon: Icons.show_chart_rounded,
+                                    icon: Icons.priority_high_rounded,
                                     value: attention > 0
                                         ? _formatCount(attention)
                                         : _formatCount(avg),
@@ -507,53 +378,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 200,
-                              child: _AreaChart(
-                                labels: series.labels,
-                                primary: series.primary,
-                                secondary: series.secondary,
-                                tipPrimary: series.tipPrimary,
-                                tipSecondary: series.tipSecondary,
-                              ),
-                            ),
                           ],
-                        ),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                        child: Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFE8EAED),
                         ),
                       ),
                     ),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                        child: Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                "Trending Items",
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  color: _ink,
-                                  letterSpacing: -0.3,
-                                ),
-                              ),
-                            ),
-                            _RangeToggle(
-                              value: _listRange,
-                              onChanged: (v) =>
-                                  setState(() => _listRange = v),
-                            ),
-                          ],
+                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
+                        child: Text(
+                          switch (_range) {
+                            _ScheduleRange.today => "Due today",
+                            _ScheduleRange.weekly => "This week",
+                            _ScheduleRange.monthly => "This month",
+                          },
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                            letterSpacing: -0.3,
+                          ),
                         ),
                       ),
                     ),
@@ -566,7 +409,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             child: Text(
                               _search.text.trim().isNotEmpty
                                   ? "No schedules match your search."
-                                  : "No schedules yet.\nCreate them in the web admin or per equipment.",
+                                  : "No schedules in this range.\nTry Weekly / Monthly, or create one per equipment.",
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: _muted,
@@ -735,269 +578,6 @@ class _KpiCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _AreaChart extends StatefulWidget {
-  final List<String> labels;
-  final List<double> primary;
-  final List<double> secondary;
-  final List<double> tipPrimary;
-  final List<double> tipSecondary;
-
-  const _AreaChart({
-    required this.labels,
-    required this.primary,
-    required this.secondary,
-    required this.tipPrimary,
-    required this.tipSecondary,
-  });
-
-  @override
-  State<_AreaChart> createState() => _AreaChartState();
-}
-
-class _AreaChartState extends State<_AreaChart> {
-  int? _focus;
-  double _plotWidth = 0;
-
-  void _setFocus(Offset local, double width) {
-    if (widget.labels.isEmpty || width <= 0) return;
-    final i = chartNearestIndex(local.dx, width, widget.labels.length);
-    if (_focus != i) setState(() => _focus = i);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final peak = [
-      ...widget.primary,
-      ...widget.secondary,
-    ].fold<double>(0, (m, v) => math.max(m, v));
-    final maxV = peak <= 0 ? 4.0 : peak * 1.05;
-
-    final yLabels = [
-      chartFmtValue(maxV),
-      chartFmtValue(maxV * 0.75),
-      chartFmtValue(maxV * 0.5),
-      "0",
-    ];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: 34,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final y in yLabels)
-                Text(
-                  y,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFB0B5BD),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    _plotWidth = constraints.maxWidth;
-                    final focusX = _focus == null || widget.labels.length <= 1
-                        ? null
-                        : _plotWidth *
-                            (_focus! / (widget.labels.length - 1));
-                    return TapRegion(
-                      onTapOutside: (_) {
-                        if (_focus != null) setState(() => _focus = null);
-                      },
-                      child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (d) =>
-                          _setFocus(d.localPosition, constraints.maxWidth),
-                      onPanStart: (d) =>
-                          _setFocus(d.localPosition, constraints.maxWidth),
-                      onPanUpdate: (d) =>
-                          _setFocus(d.localPosition, constraints.maxWidth),
-                      onPanEnd: (_) {},
-                      onLongPressEnd: (_) => setState(() => _focus = null),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _AreaChartPainter(
-                                primary: widget.primary,
-                                secondary: widget.secondary,
-                                peak: maxV,
-                                labelCount: widget.labels.length,
-                                primaryColor: _scheduleBlue,
-                                secondaryColor: const Color(0xFFE5E7EB),
-                                gridColor: const Color(0xFFE8EAED),
-                                focusIndex: _focus,
-                              ),
-                            ),
-                          ),
-                          if (_focus != null && focusX != null)
-                            Positioned(
-                              left: (focusX - 70)
-                                  .clamp(0.0, math.max(0.0, _plotWidth - 140)),
-                              top: 8,
-                              child: ChartTooltipBubble(
-                                title: widget.labels[_focus!],
-                                rows: [
-                                  ChartTooltipRow(
-                                    color: _scheduleBlue,
-                                    label: "Due",
-                                    value: chartFmtValue(
-                                      _focus! < widget.tipPrimary.length
-                                          ? widget.tipPrimary[_focus!]
-                                          : 0,
-                                    ),
-                                  ),
-                                  ChartTooltipRow(
-                                    color: const Color(0xFF9CA3AF),
-                                    label: "Total",
-                                    value: chartFmtValue(
-                                      _focus! < widget.tipSecondary.length
-                                          ? widget.tipSecondary[_focus!]
-                                          : 0,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  for (final label in widget.labels)
-                    Expanded(
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AreaChartPainter extends CustomPainter {
-  final List<double> primary;
-  final List<double> secondary;
-  final double peak;
-  final int labelCount;
-  final Color primaryColor;
-  final Color secondaryColor;
-  final Color gridColor;
-  final int? focusIndex;
-
-  _AreaChartPainter({
-    required this.primary,
-    required this.secondary,
-    required this.peak,
-    required this.labelCount,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.gridColor,
-    this.focusIndex,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final n = math.max(primary.length, secondary.length);
-    if (n == 0 || peak <= 0) return;
-
-    final grid = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
-    final cols = math.max(labelCount, 2);
-    for (var i = 0; i < cols; i++) {
-      final x = size.width * (i / (cols - 1));
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-
-    Offset pt(List<double> values, int i) {
-      final x = n == 1 ? 0.0 : size.width * (i / (n - 1));
-      final v = i < values.length ? values[i] : 0.0;
-      final y = size.height - (v / peak) * size.height;
-      return Offset(x, y.clamp(0.0, size.height));
-    }
-
-    Path smoothFill(List<double> values) {
-      final path = Path();
-      for (var i = 0; i < n; i++) {
-        final p = pt(values, i);
-        if (i == 0) {
-          path.moveTo(p.dx, size.height);
-          path.lineTo(p.dx, p.dy);
-        } else {
-          final prev = pt(values, i - 1);
-          final cx = (prev.dx + p.dx) / 2;
-          path.cubicTo(cx, prev.dy, cx, p.dy, p.dx, p.dy);
-        }
-      }
-      final last = pt(values, n - 1);
-      path.lineTo(last.dx, size.height);
-      path.close();
-      return path;
-    }
-
-    void drawArea(List<double> values, Color color) {
-      if (values.isEmpty) return;
-      canvas.drawPath(smoothFill(values), Paint()..color = color);
-    }
-
-    drawArea(secondary, secondaryColor);
-    drawArea(primary, primaryColor);
-
-    if (focusIndex != null && labelCount > 0) {
-      final fi = focusIndex!.clamp(0, labelCount - 1);
-      final fx = labelCount == 1
-          ? size.width / 2
-          : size.width * (fi / (labelCount - 1));
-      canvas.drawLine(
-        Offset(fx, 0),
-        Offset(fx, size.height),
-        Paint()
-          ..color = const Color(0xFF94A3B8)
-          ..strokeWidth = 1.4,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _AreaChartPainter oldDelegate) {
-    return oldDelegate.primary != primary ||
-        oldDelegate.secondary != secondary ||
-        oldDelegate.peak != peak ||
-        oldDelegate.labelCount != labelCount ||
-        oldDelegate.focusIndex != focusIndex;
   }
 }
 

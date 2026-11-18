@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../models/computer_set_scan.dart';
 import '../../services/api_service.dart';
 import '../../utils/input_limits.dart';
+import '../../widgets/computer_set_member_sheet.dart';
 import '../qr/qr_scanner_screen.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -2969,11 +2971,12 @@ class _ReportScreenState extends State<ReportScreen>
   }
 
   /// Validates a scanned QR and fills location + equipment on success.
+  /// Computer-set QRs open a member picker first (same as held-equipment tree).
   Future<({String? error, String? name})> _applyScannedEquipment(
     String code,
   ) async {
     final res = await api.getReportEquipmentByQr(code);
-    if (res["success"] != true || res["equipment"] is! Map) {
+    if (res["success"] != true) {
       final msg = res["message"]?.toString().trim();
       return (
         error: (msg == null || msg.isEmpty)
@@ -2983,7 +2986,49 @@ class _ReportScreenState extends State<ReportScreen>
       );
     }
 
-    final item = Map<String, dynamic>.from(res["equipment"] as Map);
+    Map<String, dynamic>? item;
+
+    if (res["type"]?.toString() == "computer_set" &&
+        res["computer_set"] is Map &&
+        res["members"] is List) {
+      if (!mounted) {
+        return (error: "Couldn't open the computer set picker.", name: null);
+      }
+      final set = ComputerSetScan.fromJson(
+        Map<String, dynamic>.from(res["computer_set"] as Map),
+        res["members"] as List,
+      );
+      if (set.memberMaps.isEmpty) {
+        return (
+          error: "This computer set has no reportable equipment.",
+          name: null,
+        );
+      }
+      // Use root navigator context so the sheet appears above the scanner.
+      final overlayCtx =
+          Navigator.of(context, rootNavigator: true).context;
+      item = await showComputerSetReportMemberPicker(
+        context: overlayCtx,
+        computerSet: set,
+      );
+      if (item == null) {
+        return (error: "", name: null); // cancelled picker — keep scanning
+      }
+      if (!_heldCanReport(item)) {
+        final reason = item["report_block_reason"]?.toString().trim();
+        return (
+          error: (reason == null || reason.isEmpty)
+              ? "That set member cannot be reported right now."
+              : reason,
+          name: null,
+        );
+      }
+    } else if (res["equipment"] is Map) {
+      item = Map<String, dynamic>.from(res["equipment"] as Map);
+    } else {
+      return (error: "No equipment matches this QR code.", name: null);
+    }
+
     final id = _equipmentIdOf(item);
     if (id != null && _addedEquipmentIds.contains(id)) {
       return (error: "That equipment is already in your list.", name: null);
@@ -2993,7 +3038,9 @@ class _ReportScreenState extends State<ReportScreen>
     return (
       error: error,
       name: error == null
-          ? item["equipment_name"]?.toString() ?? "Equipment"
+          ? item["equipment_name"]?.toString() ??
+              item["name"]?.toString() ??
+              "Equipment"
           : null,
     );
   }
@@ -5132,14 +5179,20 @@ class _QuickChecksDialogState extends State<_QuickChecksDialog> {
     _finish(_QuickCheckStatus.done);
   }
 
-  void _finish(_QuickCheckStatus status) {
+  void _finish(_QuickCheckStatus status, {bool skipChecks = false}) {
     Navigator.of(context).pop(
       _QuickCheckOutcome(
         status,
-        status == _QuickCheckStatus.cancelled ? const [] : _givenAnswers,
+        (status == _QuickCheckStatus.cancelled || skipChecks)
+            ? const []
+            : _givenAnswers,
       ),
     );
   }
+
+  /// Add the item without answering checks — severity still uses the
+  /// suggested issue (+ free-text / room rules) on submit.
+  void _skipChecks() => _finish(_QuickCheckStatus.done, skipChecks: true);
 
   @override
   Widget build(BuildContext context) {
@@ -5372,15 +5425,26 @@ class _QuickChecksDialogState extends State<_QuickChecksDialog> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                "If one fixes it, you won't need to report.",
-                textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+            const Spacer(),
+            TextButton(
+              onPressed: _skipChecks,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF64748B),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                "Skip — just report",
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Close cancels. Skip adds this issue without the checks.",
+          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), height: 1.3),
         ),
       ],
     );

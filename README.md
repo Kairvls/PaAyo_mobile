@@ -17,9 +17,10 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 Mobile Running: 
+- Full copy of the run steps: see **MOBILE_RUNNING.md**
 - on the phone open the developer options (wireless debugging)
 - ipconfig to check to IPv4 address & copy the port
-- & "C:\Users\jc suan\AppData\Local\Android\Sdk\platform-tools\adb.exe" connect 192.168.137.209:38637 (use the phone ip address from developer options to make the laptop and phone connected to each other)
+- & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" connect 192.168.1.21:42333 (use the phone ip:port from developer options — works on any Windows user/laptop; old classmate path was `C:\Users\jc suan\...`)
 - flutter devices to confirm if the ip address exist
 - flutter run then click or choose the phone ip address
 - r to hot reload
@@ -46,3 +47,34 @@ We'll email a link
 
 Your PIN is emailed to you when the maintenance office adds or approves you as a reporter. 
 No PIN or no email on file?
+
+---
+
+## Extra notes (this PC / current LAN)
+
+Repo: https://github.com/Kairvls/PaAyo_mobile.git
+
+API host is centralized in `lib/core/constants/api.dart` (`Api.host`).  
+Current LAN IPv4 for this machine: `192.168.1.24` — update that constant when `ipconfig` changes.
+
+ADB on this PC (when not using the path above):
+
+`C:\Users\aljon\AppData\Local\Android\Sdk\platform-tools\adb.exe`
+
+```powershell
+$adb = "C:\Users\aljon\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+& $adb pair 192.168.1.21:PAIR_PORT
+& $adb connect 192.168.1.21:CONNECT_PORT   # use a colon, not a dot
+& $adb devices
+```
+
+Backend for phone access (must bind all interfaces):
+
+```powershell
+cd C:\xampp\htdocs\STI-PRISM
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+Confirm API from this PC: `http://192.168.1.24:8000/api/rooms`
+
+Helper script: `tool/adb-connect.ps1`

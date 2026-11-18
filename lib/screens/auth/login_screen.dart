@@ -146,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
         kind: _LoginFeedbackKind.denied,
         title: "Access not allowed",
         message:
-            "This Microsoft account is not authorized. Only STI College Ormoc Maintenance Personnel can continue.",
+            "This Microsoft account could not be signed in. Please try again or contact support.",
       );
       return;
     }
@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
       kind: _LoginFeedbackKind.generic,
       title: "Sign-in unsuccessful",
       message: detail.isEmpty
-          ? "Something went wrong while signing in. Please try again with an authorized account."
+          ? "Something went wrong while signing in. Please try again."
           : detail,
     );
   }
@@ -260,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (status == 401 || status == 403) {
         final serverMessage = data is Map ? data["message"]?.toString() : null;
         throw Exception(
-          serverMessage ?? "Unauthorized. Not allowed for maintenance access.",
+          serverMessage ?? "Access denied.",
         );
       }
 
@@ -307,7 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
           kind: _LoginFeedbackKind.denied,
           title: "Access not allowed",
           message:
-              "Your account signed in with Microsoft, but it is not registered as Maintenance Personnel in PaAyo. Please use an authorized account or contact your administrator.",
+              "Sign-in succeeded with Microsoft, but this account does not have access. Please contact support if you need help.",
         );
       } else {
         _mapError(e);
@@ -420,11 +420,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           140,
                     ),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
+                        const SizedBox(height: 36),
                         Image.asset(
-                          "assets/images/scan_login2.png",
-                          height: 220,
+                          "assets/images/paayo_logo_original.png",
+                          height: 168,
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
                         ),
@@ -514,15 +515,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
               ),
               const SizedBox(height: 14),
-              /*const Text(
-                "Maintenance Personnel only",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),*/
             ],
           ),
         ),
@@ -554,7 +546,8 @@ class _Office365Button extends StatelessWidget {
       width: double.infinity,
       height: 52,
       child: Material(
-        color: const Color(0xFF0F172A),
+        // Same blue as the PaAyo gear mark (#002784).
+        color: const Color(0xFF002784),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onPressed,

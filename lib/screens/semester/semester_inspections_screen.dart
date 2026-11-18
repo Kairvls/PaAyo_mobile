@@ -184,8 +184,6 @@ class _SemesterInspectionsScreenState extends State<SemesterInspectionsScreen> {
             }
 
             final campaigns = _filter(snap.data ?? []);
-            final total = snap.data?.length ?? 0;
-            final open = (snap.data ?? []).where((c) => c.isOpen).length;
 
             return RefreshIndicator(
               onRefresh: () async => _reload(),
@@ -200,44 +198,20 @@ class _SemesterInspectionsScreenState extends State<SemesterInspectionsScreen> {
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _KpiCard(
-                              icon: Icons.assignment_outlined,
-                              value: "$total",
-                              label: "Campaigns",
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _KpiCard(
-                              icon: Icons.play_circle_outline_rounded,
-                              value: "$open",
-                              label: "Open now",
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
-                        child: Text(
-                          campaigns.isEmpty && _search.text.trim().isNotEmpty
-                              ? "No matches"
-                              : "Campaigns",
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: _ink,
-                            letterSpacing: -0.3,
-                          ),
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                      child: Text(
+                        campaigns.isEmpty && _search.text.trim().isNotEmpty
+                            ? "No matches"
+                            : "Active checks",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                          letterSpacing: -0.3,
                         ),
                       ),
                     ),
+                  ),
                     if (campaigns.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -404,51 +378,3 @@ class _SemesterInspectionsScreenState extends State<SemesterInspectionsScreen> {
   }
 }
 
-class _KpiCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _KpiCard({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF0025CC)),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF111827),
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF9CA3AF),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

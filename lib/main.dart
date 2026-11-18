@@ -14,6 +14,7 @@ import 'screens/schedule/schedule_screen.dart';
 import 'screens/maintenance/maintenance_screen.dart';
 import 'screens/reports/reports_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/room_inspection/room_inspections_screen.dart';
 import 'screens/semester/semester_inspections_screen.dart';
 
 void main() {
@@ -44,6 +45,7 @@ class PrismMobile extends StatelessWidget {
         '/history': (_) => const HistoryScreen(),
         '/schedule': (_) => const ScheduleScreen(),
         '/maintenance': (_) => const MaintenanceScreen(),
+        '/room-inspections': (_) => const RoomInspectionsScreen(),
         '/reports': (_) => const ReportsScreen(),
         '/semester-inspections': (_) => const SemesterInspectionsScreen(),
       },

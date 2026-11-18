@@ -378,10 +378,12 @@ class _PriorityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = accent ?? const Color(0xFF0F172A);
+    // "All Priorities" uses brand blue; named levels keep their accent tint.
+    final color = accent ?? const Color(0xFF0025CC);
+    final solidSelected = accent == null;
     return Material(
       color: selected
-          ? color.withValues(alpha: accent == null ? 1 : 0.12)
+          ? (solidSelected ? color : color.withValues(alpha: 0.12))
           : Colors.white,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
@@ -392,9 +394,7 @@ class _PriorityChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: selected
-                  ? (accent ?? const Color(0xFF0F172A))
-                  : const Color(0xFFE2E8F0),
+              color: selected ? color : const Color(0xFFE2E8F0),
             ),
           ),
           child: Text(
@@ -403,7 +403,7 @@ class _PriorityChip extends StatelessWidget {
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
               color: selected
-                  ? (accent == null ? Colors.white : color)
+                  ? (solidSelected ? Colors.white : color)
                   : const Color(0xFF64748B),
             ),
           ),

@@ -32,6 +32,7 @@ class EquipmentOverviewSections extends StatelessWidget {
       children: [
         _Section(
           title: "Asset information",
+          maxVisible: 8,
           rows: [
             ("Brand", p.brand),
             ("Model", p.model),
@@ -88,14 +89,29 @@ class EquipmentOverviewSections extends StatelessWidget {
 
 /// Key lifecycle dates plus the full event timeline (web "Lifecycle" and
 /// "Activity" tabs).
-class EquipmentLifecycleSections extends StatelessWidget {
+class EquipmentLifecycleSections extends StatefulWidget {
   final EquipmentFullProfile profile;
 
   const EquipmentLifecycleSections({super.key, required this.profile});
 
   @override
+  State<EquipmentLifecycleSections> createState() =>
+      _EquipmentLifecycleSectionsState();
+}
+
+class _EquipmentLifecycleSectionsState
+    extends State<EquipmentLifecycleSections> {
+  static const _timelinePreview = 5;
+  bool _timelineExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final p = profile;
+    final p = widget.profile;
+    final events = p.events;
+    final canCollapse = events.length > _timelinePreview;
+    final visibleCount = !canCollapse || _timelineExpanded
+        ? events.length
+        : _timelinePreview;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,7 +138,7 @@ class EquipmentLifecycleSections extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        if (p.events.isEmpty)
+        if (events.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 22),
@@ -136,30 +152,61 @@ class EquipmentLifecycleSections extends StatelessWidget {
               style: TextStyle(color: _muted, fontSize: 13),
             ),
           )
-        else
-          for (int i = 0; i < p.events.length; i++)
+        else ...[
+          for (int i = 0; i < visibleCount; i++)
             _TimelineTile(
-              event: p.events[i],
-              isLast: i == p.events.length - 1,
+              event: events[i],
+              isLast: i == visibleCount - 1 &&
+                  (!canCollapse || _timelineExpanded),
             ),
+          if (canCollapse) ...[
+            const SizedBox(height: 4),
+            _ShowMoreButton(
+              expanded: _timelineExpanded,
+              hiddenCount: events.length - _timelinePreview,
+              onTap: () =>
+                  setState(() => _timelineExpanded = !_timelineExpanded),
+            ),
+          ],
+        ],
       ],
     );
   }
 }
 
-class _Section extends StatelessWidget {
+class _Section extends StatefulWidget {
   final String title;
   final List<(String, String?)> rows;
 
-  const _Section({required this.title, required this.rows});
+  /// When set and [rows] is longer, only this many rows show until expanded.
+  final int? maxVisible;
+
+  const _Section({
+    required this.title,
+    required this.rows,
+    this.maxVisible,
+  });
+
+  @override
+  State<_Section> createState() => _SectionState();
+}
+
+class _SectionState extends State<_Section> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final max = widget.maxVisible;
+    final canCollapse = max != null && rows.length > max;
+    final visibleCount =
+        !canCollapse || _expanded ? rows.length : max;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          widget.title,
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w800,
@@ -175,16 +222,78 @@ class _Section extends StatelessWidget {
           ),
           child: Column(
             children: [
-              for (int i = 0; i < rows.length; i++)
+              for (int i = 0; i < visibleCount; i++)
                 _Row(
                   label: rows[i].$1,
                   value: rows[i].$2,
-                  showDivider: i < rows.length - 1,
+                  showDivider: i < visibleCount - 1 || canCollapse,
+                ),
+              if (canCollapse)
+                _ShowMoreButton(
+                  expanded: _expanded,
+                  hiddenCount: rows.length - max,
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  inset: true,
                 ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ShowMoreButton extends StatelessWidget {
+  final bool expanded;
+  final int hiddenCount;
+  final VoidCallback onTap;
+  final bool inset;
+
+  const _ShowMoreButton({
+    required this.expanded,
+    required this.hiddenCount,
+    required this.onTap,
+    this.inset = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = expanded
+        ? "Show less"
+        : "Show $hiddenCount more";
+
+    return Material(
+      color: inset ? Colors.white : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: inset
+            ? const BorderRadius.vertical(bottom: Radius.circular(14))
+            : BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(14, inset ? 10 : 8, 14, inset ? 12 : 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _blue,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: _blue,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
