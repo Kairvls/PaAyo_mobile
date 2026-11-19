@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import 'prism_button.dart';
+import 'paayo_button.dart';
 
 class FeatureCard extends StatelessWidget {
   final IconData icon;
@@ -91,7 +91,7 @@ class FeatureCard extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          PrismButton(
+          PaAyoButton(
             text: "Continue",
 
             onPressed: onPressed,

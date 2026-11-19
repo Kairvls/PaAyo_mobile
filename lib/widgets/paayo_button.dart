@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-class PrismButton extends StatelessWidget {
+class PaAyoButton extends StatelessWidget {
   final String text;
 
   final VoidCallback onPressed;
 
-  const PrismButton({
+  const PaAyoButton({
     super.key,
     required this.text,
     required this.onPressed,
@@ -17,24 +17,18 @@ class PrismButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-
       child: FilledButton(
         onPressed: onPressed,
-
         style: FilledButton.styleFrom(
           backgroundColor: AppTheme.primaryBlue,
-
           foregroundColor: Colors.white,
-
           padding: const EdgeInsets.symmetric(
             vertical: 16,
           ),
-
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-
         child: Text(
           text,
           style: const TextStyle(

@@ -1,5 +1,5 @@
 /// Max lengths for mobile report-related text inputs.
-/// Keep in sync with STI-PRISM MobileReportController / InputLimits.
+/// Keep in sync with backend MobileReportController / InputLimits.
 class InputLimits {
   /// API: employee_id max:20 on verify / forgot-pin.
   static const employeeId = 20;

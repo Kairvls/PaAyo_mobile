@@ -1,5 +1,5 @@
 /// Canonical equipment condition and inventory status values (mobile).
-/// Keep in sync with STI-PRISM EquipmentConditions / EquipmentInventoryStatuses.
+/// Keep in sync with backend EquipmentConditions / EquipmentInventoryStatuses.
 class EquipmentConditions {
   static const good = "Good";
   static const underMaintenance = "Under Maintenance";

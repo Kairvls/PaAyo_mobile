@@ -6,7 +6,7 @@ Use this on **whichever Windows laptop** you’re on. Do not hardcode another cl
 
 ---
 
-## 1. Start the STI-PRISM API (phone must reach it)
+## 1. Start the PaAyo API (phone must reach it)
 
 ```powershell
 cd C:\xampp\htdocs\STI-PRISM

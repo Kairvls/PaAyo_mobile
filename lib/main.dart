@@ -21,11 +21,11 @@ void main() {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   // Keep native splash up until Flutter splash is ready to crossfade.
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  runApp(const PrismMobile());
+  runApp(const PaAyoMobile());
 }
 
-class PrismMobile extends StatelessWidget {
-  const PrismMobile({super.key});
+class PaAyoMobile extends StatelessWidget {
+  const PaAyoMobile({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -391,7 +391,7 @@ class _ScheduleFormScreenState extends State<_ScheduleFormScreen> {
   static const _border = Color(0xFFE5E7EB);
 
   static const _statuses = ["Active", "Completed", "Overdue"];
-  /// Labels match STI-PRISM `EquipmentSchedules::FREQUENCIES` (+ Weekly).
+  /// Labels match backend `EquipmentSchedules::FREQUENCIES` (+ Weekly).
   static const _frequencies = [
     "Weekly",
     "Monthly",

@@ -98,7 +98,7 @@ class _QuickCheckOutcome {
 
 class _ReportScreenState extends State<ReportScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  /// Matches STI-PRISM mobile Maintenance Report modal tokens.
+  /// Matches PaAyo / web Maintenance Report modal tokens.
   static const _ink = Color(0xFF1A1A2E);
   static const _muted = Color(0xFF6B7280);
   static const _soft = Color(0xFFF3F4F6);

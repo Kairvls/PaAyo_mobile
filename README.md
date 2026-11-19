@@ -1,6 +1,6 @@
-# prism_mobile
+# PaAyo mobile
 
-A new Flutter project.
+STI campus equipment maintenance & reporting app (Flutter).
 
 ## Getting Started
 
